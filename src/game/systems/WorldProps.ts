@@ -124,10 +124,8 @@ const WATER_SHIMMER_TILE = 192;
 
 export type FruitTreeKind =
   | 'acai'
-  | 'cupuacu'
   | 'castanha'
   | 'buriti'
-  | 'pupunha'
   | 'araca';
 
 export interface FruitTreeProp {
@@ -168,20 +166,16 @@ export interface HerbProp {
 // Fruit name shown in the collect prompt for each Amazon fruit tree.
 const FRUIT_TREE_NAMES: Record<FruitTreeKind, string> = {
   acai: 'Açaí',
-  cupuacu: 'Cupuaçu',
   castanha: 'Castanha-do-Pará',
   buriti: 'Buriti',
-  pupunha: 'Pupunha',
   araca: 'Araçá',
 };
 
 // Short benefit shown under the collect prompt for each Amazon fruit tree.
 const FRUIT_TREE_BENEFITS: Record<FruitTreeKind, string> = {
-  acai: 'Ímã: Atrai todo o XP do mapa',
-  cupuacu: 'Cura: Restaura 35% de HP',
+  acai: 'Ímã: Atrai todas as moedas do mapa',
   castanha: 'Fortuna: Dropa pacote de Ouro',
   buriti: 'Frenesi: +Velocidade e Ataque (10s)',
-  pupunha: 'Proteção: Escudo temporário (10s)',
   araca: 'Explosão: Dano em área nos inimigos',
 };
 
@@ -462,14 +456,7 @@ export class WorldSystem {
 
   private spawnInitialFruitTrees(): void {
     // Several trees of each fruit start at fully random land positions.
-    const kinds: FruitTreeKind[] = [
-      'acai',
-      'cupuacu',
-      'castanha',
-      'buriti',
-      'pupunha',
-      'araca',
-    ];
+    const kinds: FruitTreeKind[] = ['acai', 'castanha', 'buriti', 'araca'];
 
     for (let i = 0; i < kinds.length; i++) {
       for (let copy = 0; copy < FRUIT_TREES_PER_KIND; copy++) {
@@ -774,12 +761,6 @@ export class WorldSystem {
         break;
       case 'buriti':
         offset = -142;
-        break;
-      case 'pupunha':
-        offset = -142;
-        break;
-      case 'cupuacu':
-        offset = -112;
         break;
       case 'acai':
         offset = -146;
@@ -2511,11 +2492,6 @@ export class WorldSystem {
       const drawSize = ACAI_MINIMAP_ICON_DRAW_SIZE;
       const drawX = Math.round(toX(tree.x) - drawSize / 2);
       const drawY = Math.round(toY(tree.y) - drawSize / 2);
-
-      if (tree.kind === 'cupuacu') {
-        this.drawCupuacuMinimapIcon(ctx, drawX, drawY);
-        continue;
-      }
 
       const icon = this.getFruitMinimapIcon(tree.kind);
       if (!icon) continue;
@@ -4548,36 +4524,6 @@ export class WorldSystem {
             setPixel(x + 1, y + 1, '#c86a32');
           }
         }
-        break;
-      }
-      case 'pupunha': {
-        // Stems fanning out from the crown, drawn behind the fruits.
-        drawLine(8, 2, 5.2, 4.2, '#4a5a1c');
-        drawLine(8, 2, 10.8, 4.2, '#4a5a1c');
-        drawLine(8, 2, 5.6, 8.8, '#4a5a1c');
-        drawLine(8, 2, 10.4, 8.8, '#4a5a1c');
-
-        const fruits = [
-          { x: 5.2, y: 6.4 },
-          { x: 10.8, y: 6.4 },
-          { x: 5.6, y: 11.2 },
-          { x: 10.4, y: 11.2 },
-        ];
-        for (let i = 0; i < fruits.length; i++) {
-          const fruit = fruits[i];
-          // Red top fading into an orange-yellow base.
-          fillEllipse(fruit.x, fruit.y, 2.2, 2.9, outline);
-          fillEllipse(fruit.x, fruit.y + 0.2, 1.6, 2.35, '#d92b1f');
-          fillEllipse(fruit.x, fruit.y - 0.2, 1.4, 1.5, '#f05a22');
-          fillEllipse(fruit.x, fruit.y + 1.0, 1.1, 1.0, '#f7b32b');
-          setPixel(fruit.x - 0.6, fruit.y - 1.0, '#ffe08a');
-          setPixel(fruit.x - 0.2, fruit.y - 1.4, '#ffe08a');
-        }
-
-        // Small green crown leaf on top.
-        fillEllipse(8, 2.0, 2.2, 1.0, outline);
-        fillEllipse(8, 2.0, 1.7, 0.6, '#2f6b25');
-        setPixel(7.6, 1.7, '#67a83e');
         break;
       }
       case 'araca': {
@@ -7166,28 +7112,17 @@ export class WorldSystem {
       const screen = camera.worldToScreen(tree.x, tree.y);
       const sway = Math.sin(tree.animTimer) * 2;
       const acaiSprite = tree.kind === 'acai' ? this.getAcaiPixelSprite() : null;
-      const cupuacuSprite =
-        tree.kind === 'cupuacu' ? this.getCupuacuPixelSprite() : null;
       const castanhaSprite =
         tree.kind === 'castanha' ? this.getCastanhaPixelSprite() : null;
       const buritiSprite =
         tree.kind === 'buriti' ? this.getBuritiPixelSprite() : null;
-      const pupunhaSprite =
-        tree.kind === 'pupunha' ? this.getPupunhaPixelSprite() : null;
       const aracaSprite =
         tree.kind === 'araca' ? this.getAracaPixelSprite() : null;
 
       ctx.save();
       ctx.translate(screen.x, screen.y);
 
-      if (
-        !acaiSprite &&
-        !cupuacuSprite &&
-        !castanhaSprite &&
-        !buritiSprite &&
-        !pupunhaSprite &&
-        !aracaSprite
-      ) {
+      if (!acaiSprite && !castanhaSprite && !buritiSprite && !aracaSprite) {
         // Shared ground shadow for the procedurally drawn trees.
         ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
         ctx.beginPath();
@@ -7208,20 +7143,6 @@ export class WorldSystem {
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(
           acaiSprite,
-          -spriteWidth / 2,
-          -spriteHeight,
-          spriteWidth,
-          spriteHeight
-        );
-        ctx.restore();
-      } else if (cupuacuSprite) {
-        // Nearest-neighbour upscale keeps every pixel of the crafted sprite.
-        const spriteWidth = CUPUACU_SPRITE_WIDTH * CUPUACU_SPRITE_SCALE;
-        const spriteHeight = CUPUACU_SPRITE_HEIGHT * CUPUACU_SPRITE_SCALE;
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(
-          cupuacuSprite,
           -spriteWidth / 2,
           -spriteHeight,
           spriteWidth,
@@ -7250,20 +7171,6 @@ export class WorldSystem {
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(
           buritiSprite,
-          -spriteWidth / 2,
-          -spriteHeight,
-          spriteWidth,
-          spriteHeight
-        );
-        ctx.restore();
-      } else if (pupunhaSprite) {
-        // Nearest-neighbour upscale keeps the hand-placed pixel-art grid crisp.
-        const spriteWidth = PUPUNHA_SPRITE_WIDTH * PUPUNHA_SPRITE_SCALE;
-        const spriteHeight = PUPUNHA_SPRITE_HEIGHT * PUPUNHA_SPRITE_SCALE;
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(
-          pupunhaSprite,
           -spriteWidth / 2,
           -spriteHeight,
           spriteWidth,
@@ -7321,68 +7228,6 @@ export class WorldSystem {
           ctx.closePath();
           ctx.fill();
         }
-      } else if (tree.kind === 'pupunha') {
-        // Pupunheira: slim ringed palm with long fronds and red fruit bunches.
-        const topX = -sway * 0.4;
-        const topY = -86;
-
-        ctx.strokeStyle = '#7a4d29';
-        ctx.lineWidth = 6;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.quadraticCurveTo(-3, -46, topX, topY);
-        ctx.stroke();
-        ctx.lineCap = 'butt';
-
-        // Trunk rings.
-        ctx.strokeStyle = '#a16207';
-        ctx.lineWidth = 1.4;
-        for (let r = 0; r < 5; r++) {
-          const t = 0.18 + r * 0.16;
-          const rx = topX * t;
-          const ry = topY * t;
-          ctx.beginPath();
-          ctx.moveTo(rx - 5, ry);
-          ctx.lineTo(rx + 5, ry);
-          ctx.stroke();
-        }
-
-        for (let f = 0; f < 9; f++) {
-          const angle = -Math.PI + (f / 8) * Math.PI;
-          const length = 30 + (f % 2) * 8;
-          ctx.strokeStyle = f % 2 === 0 ? '#166534' : '#15803d';
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.moveTo(topX, topY);
-          ctx.quadraticCurveTo(
-            topX + Math.cos(angle) * length * 0.5,
-            topY + Math.sin(angle) * length * 0.55 - 6,
-            topX + Math.cos(angle) * length,
-            topY + Math.sin(angle) * length * 0.75
-          );
-          ctx.stroke();
-        }
-
-        // Orange-red pupunha fruit cluster at the crown.
-        ctx.fillStyle = '#dc2626';
-        for (let b = 0; b < 9; b++) {
-          const angle = (b / 9) * Math.PI * 2;
-          const radius = 6 + (b % 3) * 2;
-          ctx.beginPath();
-          ctx.arc(
-            topX + Math.cos(angle) * radius,
-            topY + 9 + Math.sin(angle) * radius * 0.6,
-            2.6,
-            0,
-            Math.PI * 2
-          );
-          ctx.fill();
-        }
-        ctx.fillStyle = '#fb923c';
-        ctx.beginPath();
-        ctx.arc(topX + 4, topY + 7, 1.5, 0, Math.PI * 2);
-        ctx.fill();
       } else if (tree.kind === 'araca') {
         // Araçazeiro: bushy small tree with round yellow-green araçá fruit.
         ctx.fillStyle = '#5b3a1e';

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, Clock, Crown, Droplets, Heart, Leaf, MousePointerClick, PawPrint, Shield, Skull, Sparkles, Trees, X, Zap } from 'lucide-react';
+import { BookOpen, Clock, Crown, Droplets, Leaf, MousePointerClick, PawPrint, Shield, Skull, Sparkles, Trees, X, Zap } from 'lucide-react';
 import { Enemy } from '@/game/entities/Enemy';
 import { Player } from '@/game/entities/Player';
 import { Camera } from '@/game/engine/Camera';
@@ -783,13 +783,6 @@ const FRUIT_TREES: {
     icon: <Sparkles className="h-4 w-4" />,
   },
   {
-    name: 'Cupuaçuzeiro',
-    color: '#d4a017',
-    effect: 'Cura 35% HP',
-    description: 'Restaura 35% da vida máxima do herói.',
-    icon: <Heart className="h-4 w-4" />,
-  },
-  {
     name: 'Castanheira-do-Pará',
     color: '#8b5a2b',
     effect: 'Pacote de Ouro',
@@ -802,13 +795,6 @@ const FRUIT_TREES: {
     effect: '+Velocidade e Ataque (10s)',
     description: 'Concede frenesi de velocidade e ataque por 10 segundos.',
     icon: <Zap className="h-4 w-4" />,
-  },
-  {
-    name: 'Pupunheira',
-    color: '#ef4444',
-    effect: 'Escudo protetor (10s)',
-    description: 'Cria um escudo protetor por 10 segundos.',
-    icon: <Shield className="h-4 w-4" />,
   },
   {
     name: 'Araçazeiro',
@@ -986,7 +972,7 @@ export const AmazonGuideModal: React.FC<AmazonGuideModalProps> = ({ onClose }) =
               <section>
                 <h3 className="mb-1 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#e69f22]">
                   <Leaf className="h-4 w-4 text-lime-400" />
-                  As 6 Árvores Frutíferas
+                  As 4 Árvores Frutíferas
                 </h3>
                 <p className="mb-2 text-[11px] text-[#9ca3af]">
                   Coleta com a tecla <span className="font-bold text-[#f3f4f6]">E</span> (ou toque no

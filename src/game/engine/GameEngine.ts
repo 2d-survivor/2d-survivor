@@ -2740,13 +2740,6 @@ export class GameEngine {
           drop.isBeingMagnetPulled = true;
         }
       }
-    } else if (fruit.kind === 'cupuacu') {
-      // Cupuaçu: restore 35% of the player's maximum HP.
-      const healed = Math.max(1, Math.round(this.player.maxHp * 0.35));
-      this.player.heal(healed);
-      this.sound.playGemPickup(8);
-      this.vfx.addSparks(fruit.x, fruit.y, '#84cc16', 12);
-      this.vfx.addDamageNumber(this.player.x, this.player.y, healed, false, true);
     } else if (fruit.kind === 'castanha') {
       // Castanha-do-Pará: drop an extra gold package.
       this.sound.playGemPickup(4);
@@ -2771,12 +2764,6 @@ export class GameEngine {
       this.vfx.addSparks(fruit.x, fruit.y, '#fb923c', 14);
       this.player.speedBoostTimer = Math.max(this.player.speedBoostTimer, 10);
       this.player.attackSpeedBoostTimer = 10;
-    } else if (fruit.kind === 'pupunha') {
-      // Pupunha: protective shield that halves incoming damage for 10 seconds.
-      this.sound.playGemPickup(8);
-      this.vfx.triggerFlash('#38bdf8', 0.2);
-      this.vfx.addSparks(fruit.x, fruit.y, '#38bdf8', 14);
-      this.player.shieldTimer = Math.max(this.player.shieldTimer, 10);
     } else {
       // Araçá: a shockwave that damages every nearby enemy.
       const radius = 240;
