@@ -18,6 +18,8 @@ export const CHARACTERS: CharacterConfig[] = [
       maxHp: 15,
       speed: 0.12,
       pickupRadius: 15,
+      might: 0.1,
+      projectileSpeed: 0.1,
     },
   },
   {
@@ -32,7 +34,8 @@ export const CHARACTERS: CharacterConfig[] = [
     sprite: '/dukarai.svg',
     statBonuses: {
       maxHp: 15,
-      speed: 0.12,
+      // Equivale ao pedido de 110 -> 116 u/s: +5,45% sobre a velocidade efetiva.
+      speed: 0.1811,
       pickupRadius: 20,
       cooldownReduction: 0.08,
     },
@@ -92,6 +95,8 @@ export const CHARACTERS: CharacterConfig[] = [
     attackFrames: 8,
     statBonuses: {
       maxHp: 15,
+      // Equivale ao pedido de 108 -> 114 u/s: +5,56% sobre a velocidade efetiva.
+      speed: 0.0556,
     },
   },
 ];

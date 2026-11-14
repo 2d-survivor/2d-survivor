@@ -357,6 +357,9 @@ function describeCharacterPassive(character: CharacterConfig): string {
   if (bonuses.armor) parts.push(`+${formatGuideNumber(bonuses.armor)} armadura`);
   if (bonuses.speed) parts.push(`+${formatGuideNumber(bonuses.speed * 100)}% velocidade`);
   if (bonuses.might) parts.push(`+${formatGuideNumber(bonuses.might * 100)}% dano`);
+  if (bonuses.projectileSpeed) {
+    parts.push(`+${formatGuideNumber(bonuses.projectileSpeed * 100)}% vel. projétil`);
+  }
   if (bonuses.cooldownReduction) {
     parts.push(`-${formatGuideNumber(bonuses.cooldownReduction * 100)}% recarga`);
   }
