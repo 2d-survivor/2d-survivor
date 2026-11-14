@@ -218,7 +218,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
         <header className="mb-4 w-full text-center">
           <div className="badge-pill mb-2.5">
             <Flame className="h-3 w-3 text-[#ff6b4a]" />
-            <span>Sobrevivência Roguelite</span>
+            <span>Sobrevivência Roguelike</span>
           </div>
           <h1 className="gothic-title text-3xl sm:text-5xl">Sobreviventes da Horda</h1>
           <p className="mx-auto mt-2 max-w-lg text-xs leading-relaxed text-[#9ca3af] sm:text-sm">
