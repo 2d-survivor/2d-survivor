@@ -71,7 +71,7 @@ export const CHARACTERS: CharacterConfig[] = [
       maxHp: 10,
       cooldownReduction: 0.1,
       recovery: 0.6,
-      pickupRadius: 12,
+      area: 0.15,
     },
   },
   {
