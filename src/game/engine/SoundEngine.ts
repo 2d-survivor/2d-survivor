@@ -467,14 +467,14 @@ export class SoundEngine {
     filter.frequency.setValueAtTime(1400, now);
 
     const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.055, now);
+    gain.gain.setValueAtTime(0.044, now);
 
     // Slow swell makes the rain breathe instead of sounding like static.
     const lfo = this.ctx.createOscillator();
     lfo.type = 'sine';
     lfo.frequency.setValueAtTime(0.11, now);
     const lfoGain = this.ctx.createGain();
-    lfoGain.gain.setValueAtTime(0.018, now);
+    lfoGain.gain.setValueAtTime(0.0144, now);
     lfo.connect(lfoGain);
     lfoGain.connect(gain.gain);
 
@@ -806,6 +806,7 @@ export class SoundEngine {
     // Route the soundtrack through bgmGain so mute and volume controls apply.
     if (!this.bgmAudio) {
       this.bgmAudio = new Audio(mapId === 'amazon_forest' ? AMAZON_BGM_TRACK_URL : BGM_TRACK_URL);
+      this.bgmAudio.volume = mapId === 'amazon_forest' ? 0.8 : 1;
       this.bgmAudio.loop = true;
       this.bgmAudio.preload = 'auto';
       const source = this.ctx.createMediaElementSource(this.bgmAudio);

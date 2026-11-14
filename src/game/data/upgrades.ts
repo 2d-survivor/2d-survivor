@@ -833,9 +833,9 @@ export const FUSION_RECIPES: FusionRecipe[] = [
   },
 ];
 
-/** Themed Amazon starting weapons so every run begins inside the local catalogue. */
+/** Amazon starting weapons, preserving signature skills for Derson, Kayru and Lula. */
 export const AMAZON_STARTING_WEAPON_BY_CHARACTER: Record<string, WeaponId> = {
-  derson: 'bandeja_inox',
+  derson: 'derson_combo',
   dukarai: 'bandeja_inox',
   kayrurururu: 'bow',
   dr_janelinha: 'ferrao_formiga',
