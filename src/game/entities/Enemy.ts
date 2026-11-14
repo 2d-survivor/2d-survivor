@@ -305,7 +305,7 @@ export class Enemy {
       case 'capybara':
         this.name = 'Capivara';
         this.radius = 22;
-        this.maxHp = Math.round(260 * hpMultiplier);
+        this.maxHp = Math.round(169 * hpMultiplier);
         this.speed = 46;
         this.damage = 20;
         this.xpValue = 42;
@@ -314,7 +314,7 @@ export class Enemy {
       case 'sloth':
         this.name = 'Bicho-preguiça';
         this.radius = 20;
-        this.maxHp = Math.round(220 * hpMultiplier);
+        this.maxHp = Math.round(143 * hpMultiplier);
         this.speed = 30;
         this.damage = 18;
         this.xpValue = 40;
@@ -323,7 +323,7 @@ export class Enemy {
       case 'rhino_beetle':
         this.name = 'Besouro-rinoceronte';
         this.radius = 19;
-        this.maxHp = Math.round(320 * hpMultiplier);
+        this.maxHp = Math.round(208 * hpMultiplier);
         this.speed = 52;
         this.damage = 24;
         this.xpValue = 55;
@@ -332,7 +332,7 @@ export class Enemy {
       case 'sawyer_beetle':
         this.name = 'Besouro-serra-pau';
         this.radius = 18;
-        this.maxHp = Math.round(240 * hpMultiplier);
+        this.maxHp = Math.round(156 * hpMultiplier);
         this.speed = 60;
         this.damage = 21;
         this.xpValue = 48;
@@ -341,7 +341,7 @@ export class Enemy {
       case 'giant_centipede':
         this.name = 'Lacraia-gigante';
         this.radius = 24;
-        this.maxHp = Math.round(280 * hpMultiplier);
+        this.maxHp = Math.round(182 * hpMultiplier);
         this.speed = 66;
         this.damage = 26;
         this.xpValue = 60;
@@ -405,7 +405,7 @@ export class Enemy {
       case 'giant_otter':
         this.name = 'Ariranha';
         this.radius = 20;
-        this.maxHp = Math.round(300 * hpMultiplier);
+        this.maxHp = Math.round(195 * hpMultiplier);
         this.speed = 78;
         this.damage = 24;
         this.xpValue = 58;
