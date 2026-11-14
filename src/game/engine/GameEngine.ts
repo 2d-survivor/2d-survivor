@@ -1211,7 +1211,11 @@ export class GameEngine {
         const ndx = this.player.x - e.x;
         const ndy = this.player.y - e.y;
         if (Math.sqrt(ndx * ndx + ndy * ndy) <= e.novaRadius + this.player.radius) {
-          const novaMultiplier = e instanceof GorillaBoss ? GORILLA_SLAM_DAMAGE_MULTIPLIER : 0.85;
+          const novaMultiplier = e instanceof GorillaBoss
+            ? GORILLA_SLAM_DAMAGE_MULTIPLIER
+            : e instanceof AnacondaBoss
+              ? ANACONDA.slam.damageMultiplier
+              : 0.85;
           const novaDmg = Math.max(1, Math.round(e.damage * novaMultiplier));
           const fatal = this.applyPlayerDamage(novaDmg, true, false);
           if (fatal) {

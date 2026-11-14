@@ -460,7 +460,7 @@ function getGuardianGuide(): GuardianEntry[] {
         },
         {
           name: 'Impacto no lago',
-          damage: formatGuideNumber(Math.round(anaconda.damage * 0.85)),
+          damage: formatGuideNumber(Math.round(anaconda.damage * ANACONDA.slam.damageMultiplier)),
           cooldown: formatSeconds(ANACONDA.slam.cooldown),
         },
         {
