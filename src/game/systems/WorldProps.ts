@@ -375,11 +375,11 @@ export class WorldSystem {
   public herbs: HerbProp[] = [];
   private nextHerbId: number = 1;
   private trees: TreeProp[] = [];
-  // LRU cache: rasterize only visible trees, with a 16 MiB RGBA budget.
+  // LRU cache: allocate visible tree sprites on demand, up to 128 MiB RGBA.
   private treeSprites = new Map<TreeProp, HTMLCanvasElement>();
   private treeSpriteBytes = 0;
   private treeSpriteScale = 1;
-  private readonly treeSpriteBudget = 16 * 1024 * 1024;
+  private readonly treeSpriteBudget = 128 * 1024 * 1024;
   private floorPatches: FloorPatch[] = [];
   private lakes: LakeProp[] = [];
   private riverMouths: RiverMouthGeometry[] | null = null;

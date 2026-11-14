@@ -14,6 +14,40 @@ export class SoundEngine {
   private lastPlayerHurtVariant = -1;
   private playerHurtNoise: AudioBuffer | null = null;
   private amazonHurtBuffer: AudioBuffer | null = null;
+  private thornHurtBuffer: AudioBuffer | null = null;
+  private waterWalkingBuffer: AudioBuffer | null = null;
+  private waterWalkingSource: AudioBufferSourceNode | null = null;
+
+  setWaterWalking(active: boolean): void {
+    if (!active) {
+      this.waterWalkingSource?.stop();
+      this.waterWalkingSource?.disconnect();
+      this.waterWalkingSource = null;
+      return;
+    }
+    if (this.waterWalkingSource || !this.initCtx() || !this.ctx || !this.sfxGain || !this.waterWalkingBuffer) return;
+    const source = this.ctx.createBufferSource();
+    source.buffer = this.waterWalkingBuffer;
+    source.loop = true;
+    source.connect(this.sfxGain);
+    source.start();
+    this.waterWalkingSource = source;
+  }
+
+  playThornHurt(): void {
+    if (this.muted || !this.initCtx() || !this.ctx || !this.sfxGain || !this.thornHurtBuffer) return;
+    const source = this.ctx.createBufferSource();
+    source.buffer = this.thornHurtBuffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.8;
+    source.connect(gain);
+    gain.connect(this.sfxGain);
+    source.onended = () => {
+      source.disconnect();
+      gain.disconnect();
+    };
+    source.start();
+  }
   private bowHitBuffer: AudioBuffer | null = null;
   private bowHitOffset = 0;
   private bowShotBuffer: Promise<AudioBuffer | null> | null = null;
@@ -189,6 +223,16 @@ export class SoundEngine {
         .then(data => ctx.decodeAudioData(data))
         .catch(() => null);
       // Decode at audio initialization so hits never wait for a network request.
+      void fetch('/audio/amazon-water-walking.mp3')
+        .then(response => { if (!response.ok) throw new Error('Water walking audio unavailable'); return response.arrayBuffer(); })
+        .then(data => ctx.decodeAudioData(data))
+        .then(buffer => { if (this.ctx === ctx && ctx.state !== 'closed') this.waterWalkingBuffer = buffer; })
+        .catch(() => {});
+      void fetch('/audio/thorn-bush-hurt.mp3')
+        .then(response => { if (!response.ok) throw new Error('Thorn hurt audio unavailable'); return response.arrayBuffer(); })
+        .then(data => ctx.decodeAudioData(data))
+        .then(buffer => { if (this.ctx === ctx && ctx.state !== 'closed') this.thornHurtBuffer = buffer; })
+        .catch(() => {});
       void fetch('/audio/amazon-player-hurt.mp3')
         .then(response => { if (!response.ok) throw new Error('Amazon hurt audio unavailable'); return response.arrayBuffer(); })
         .then(data => ctx.decodeAudioData(data))
@@ -799,6 +843,8 @@ export class SoundEngine {
   }
 
   destroy(): void {
+    this.setWaterWalking(false);
+    this.waterWalkingBuffer = null;
     this.bowHitBuffer = null;
     this.bowShotBuffer = null;
     this.gorillaGroundSlamBuffer = null;
@@ -807,6 +853,7 @@ export class SoundEngine {
     this.gorillaRoarBuffer = null;
     this.deathBuffer = null;
     this.amazonHurtBuffer = null;
+    this.thornHurtBuffer = null;
     this.stopBgm();
     this.stopCaveAmbience();
     this.stopAmazonAmbient();

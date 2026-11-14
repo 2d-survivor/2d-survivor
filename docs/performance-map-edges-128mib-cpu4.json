@@ -1,0 +1,146 @@
+[
+  {
+    "label": "top",
+    "dpr": 1,
+    "x": 0,
+    "y": -6700,
+    "cpuRate": 4,
+    "budgetMiB": 128,
+    "usesGameBudget": true,
+    "frames": {
+      "mean": 7.271066907775768,
+      "p95": 7.100000000000364,
+      "n": 553
+    },
+    "treeTime": {
+      "mean": 1.2347197106872663,
+      "p95": 1.699999999254942,
+      "n": 553
+    },
+    "floorTime": {
+      "mean": 2.1810126582675937,
+      "p95": 2.5,
+      "n": 553
+    },
+    "renderTime": {
+      "mean": 5.15587703437691,
+      "p95": 7.5,
+      "n": 553
+    },
+    "requests": 40922,
+    "misses": 0,
+    "cacheBytes": 20841516,
+    "configuredBudgetMiB": 128,
+    "visibleTrees": 74,
+    "visibleSpriteBytes": 20821908,
+    "errors": []
+  },
+  {
+    "label": "bottom",
+    "dpr": 1,
+    "x": 0,
+    "y": 6700,
+    "cpuRate": 4,
+    "budgetMiB": 128,
+    "usesGameBudget": true,
+    "frames": {
+      "mean": 7.433148148148147,
+      "p95": 13.800000000001091,
+      "n": 540
+    },
+    "treeTime": {
+      "mean": 1.2051851851141286,
+      "p95": 1.599999999627471,
+      "n": 540
+    },
+    "floorTime": {
+      "mean": 2.244074074123745,
+      "p95": 2.5,
+      "n": 540
+    },
+    "renderTime": {
+      "mean": 5.381481481543569,
+      "p95": 6.900000000372529,
+      "n": 540
+    },
+    "requests": 39960,
+    "misses": 0,
+    "cacheBytes": 41663424,
+    "configuredBudgetMiB": 128,
+    "visibleTrees": 74,
+    "visibleSpriteBytes": 20821908,
+    "errors": []
+  },
+  {
+    "label": "top",
+    "dpr": 2,
+    "x": 0,
+    "y": -6700,
+    "cpuRate": 4,
+    "budgetMiB": 128,
+    "usesGameBudget": true,
+    "frames": {
+      "mean": 8.194069529652351,
+      "p95": 13.900000000000546,
+      "n": 489
+    },
+    "treeTime": {
+      "mean": 2.0955010225657364,
+      "p95": 2.900000000372529,
+      "n": 489
+    },
+    "floorTime": {
+      "mean": 2.246830265812865,
+      "p95": 2.700000001117587,
+      "n": 489
+    },
+    "renderTime": {
+      "mean": 6.447034764821605,
+      "p95": 9,
+      "n": 489
+    },
+    "requests": 36186,
+    "misses": 0,
+    "cacheBytes": 83366064,
+    "configuredBudgetMiB": 128,
+    "visibleTrees": 74,
+    "visibleSpriteBytes": 83287632,
+    "errors": []
+  },
+  {
+    "label": "bottom",
+    "dpr": 2,
+    "x": 0,
+    "y": 6700,
+    "cpuRate": 4,
+    "budgetMiB": 128,
+    "usesGameBudget": true,
+    "frames": {
+      "mean": 8.41488469601677,
+      "p95": 13.900000000001455,
+      "n": 477
+    },
+    "treeTime": {
+      "mean": 2.09832285119287,
+      "p95": 2.800000000745058,
+      "n": 477
+    },
+    "floorTime": {
+      "mean": 2.3190775680701314,
+      "p95": 2.799999998882413,
+      "n": 477
+    },
+    "renderTime": {
+      "mean": 6.718658280896659,
+      "p95": 9.200000001117587,
+      "n": 477
+    },
+    "requests": 35298,
+    "misses": 0,
+    "cacheBytes": 133336112,
+    "configuredBudgetMiB": 128,
+    "visibleTrees": 74,
+    "visibleSpriteBytes": 83287632,
+    "errors": []
+  }
+]

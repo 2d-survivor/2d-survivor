@@ -302,7 +302,7 @@ const BOSSES: BossEntry[] = [
     type: 'boss_mapinguari',
     name: 'Mapinguari',
     time: '15:30',
-    ability: 'Pisões atordoantes e rugido sônico.',
+    ability: 'Rugido em área de 450 px a cada 3 s e enxame de 6 abelhas a cada 4 s.',
   },
   {
     type: 'boss_cobra_grande',

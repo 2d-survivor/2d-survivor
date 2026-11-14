@@ -76,7 +76,7 @@ interface BossProjectile {
   damage: number;
   life: number;
   maxLife: number;
-  kind: 'fireball' | 'soundwave' | 'water' | 'sonic' | 'spore' | 'spirit';
+  kind: 'fireball' | 'soundwave' | 'water' | 'sonic' | 'spore' | 'spirit' | 'bee';
 }
 
 interface BossHazard {
@@ -625,8 +625,8 @@ export class GameEngine {
   }
 
   public pause(): void {
-    this.isPaused = true;
-  }
+    this.sound.setWaterWalking(false);
+    this.isPaused = true;  }
 
   public resume(): void {
     this.isPaused = false;
@@ -784,8 +784,7 @@ export class GameEngine {
       return;
     }
     if (interactRequested && !this.bossEncounter && this.caveUnlocked && Math.hypot(this.player.x + 1950, this.player.y - 1935) < 75) {
-      this.insideCave = true;
-      this.sound.startCaveAmbience();
+      this.insideCave = true;      this.sound.startCaveAmbience();
       this.player.x = this.caveInterior.spawn.x;
       this.player.y = this.caveInterior.spawn.y;
       this.player.knockbackVX = 0;
@@ -1580,14 +1579,29 @@ export class GameEngine {
         }
       }
 
+      if (e.pendingBeeSwarm > 0) {
+        const count = e.pendingBeeSwarm;
+        e.pendingBeeSwarm = 0;
+        const aim = Math.atan2(this.player.y - e.y, this.player.x - e.x);
+        for (let bee = 0; bee < count; bee++) {
+          const angle = aim + (bee - (count - 1) / 2) * 0.16;
+          this.bossProjectiles.push({
+            x: e.x, y: e.y, vx: Math.cos(angle) * 240, vy: Math.sin(angle) * 240,
+            radius: 9, damage: Math.max(1, Math.round(e.damage * 0.6)),
+            life: 4, maxLife: 4, kind: 'bee',
+          });
+        }
+      }
+
       if (e.pendingRoar) {
         e.pendingRoar = false;
         this.camera.shake(0.35, 10);
         this.vfx.addDeathBurst(e.x, e.y, '#f59e0b', 24);
+        if (e.type === 'boss_mapinguari') this.sound.playBossRoar();
         const roarDx = this.player.x - e.x;
         const roarDy = this.player.y - e.y;
         const roarDist = Math.sqrt(roarDx * roarDx + roarDy * roarDy);
-        if (roarDist < 360 + this.player.radius) {
+        if (roarDist < (e.type === 'boss_mapinguari' ? 450 : 360) + this.player.radius) {
           const roarDamage = Math.max(1, Math.round(e.damage * 1.1));
           const fatal = this.applyPlayerDamage(roarDamage, true, false);
           if (fatal) {
@@ -1893,7 +1907,7 @@ export class GameEngine {
       if (bush) {
         this.player.thornCooldown = THORN_BUSH_HIT_COOLDOWN;
         const damage = Math.max(1, Math.round(THORN_BUSH_DAMAGE * this.difficulty.enemyDamage));
-        const fatal = this.applyPlayerDamage(damage, false, true);
+        const fatal = this.applyPlayerDamage(damage, false, true, 'thorns');
         this.player.applySlow(THORN_BUSH_SLOW, THORN_BUSH_BLEED_DURATION);
         this.player.applyBleed(THORN_BUSH_BLEED_DPS, THORN_BUSH_BLEED_DURATION);
         this.vfx.addSparks(this.player.x, this.player.y, '#dc2626', 7);
@@ -1959,6 +1973,10 @@ export class GameEngine {
    * emits a fresh splash under the hero's feet while it wades.
    */
   private updateWaterEffects(dt: number): void {
+    this.sound.setWaterWalking(
+      this.waveDirector.isAmazonForest && this.player.isMoving && !this.player.isJumping &&
+      this.worldProps.isWaterSurface(this.player.x, this.player.y)
+    );
     this.playerWaterFxTimer = Math.max(0, this.playerWaterFxTimer - dt);
     for (let i = 0; i < this.enemies.length; i++) {
       const enemy = this.enemies[i];
@@ -1983,7 +2001,6 @@ export class GameEngine {
     ) {
       this.playerWaterFxTimer = 0.22;
       this.spawnWaterRipple(this.player.x, this.player.y + this.player.radius * 0.6, true);
-      this.sound.playWaterStep();
     }
   }
 
@@ -2401,12 +2418,16 @@ export class GameEngine {
   }
 
   /** Emit hit feedback only when an attack actually removes health. */
-  private applyPlayerDamage(amount: number, critical = false, shake = false): boolean {
+  private applyPlayerDamage(amount: number, critical = false, shake = false, hurtSound: 'default' | 'thorns' = 'default'): boolean {
     const previousHp = this.player.hp;
     const fatal = this.player.takeDamage(amount);
     const damageTaken = previousHp - this.player.hp;
     if (damageTaken > 0) {
-      this.sound.playPlayerHurt(this.waveDirector.isAmazonForest ? 'amazon_forest' : 'night_plain');
+      if (hurtSound === 'thorns') {
+        this.sound.playThornHurt();
+      } else {
+        this.sound.playPlayerHurt(this.waveDirector.isAmazonForest ? 'amazon_forest' : 'night_plain');
+      }
       if (shake) this.camera.shake(0.2, 5);
       this.vfx.addDamageNumber(this.player.x, this.player.y, damageTaken, critical, false);
     }
@@ -2851,9 +2872,9 @@ export class GameEngine {
     this.resume();
   }
 
-  private handlePlayerDeath(): void {
-    if (this.bossEncounter?.kind === 'anaconda') this.restoreBossEncounter();
+  private handlePlayerDeath(): void {    if (this.bossEncounter?.kind === 'anaconda') this.restoreBossEncounter();
     this.isGameOver = true;
+    this.sound.setWaterWalking(false);
     this.sound.playGameOver();
     this.sound.stopCaveAmbience();
     this.sound.stopBgm();
@@ -4001,7 +4022,29 @@ export class GameEngine {
       const alpha = Math.min(1, p.life / 0.5);
 
       ctx.save();
-      if (p.kind === 'fireball') {
+      if (p.kind === 'bee') {
+        ctx.globalAlpha = alpha;
+        ctx.translate(screen.x, screen.y);
+        ctx.rotate(Math.atan2(p.vy, p.vx));
+        const wing = 5 + Math.sin(p.life * 65) * 2;
+        ctx.fillStyle = 'rgba(224,242,254,0.85)';
+        ctx.beginPath();
+        ctx.ellipse(-2, -6, 6, wing, -0.5, 0, Math.PI * 2);
+        ctx.ellipse(-2, 6, 6, wing, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 9, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#292524';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-4, -4); ctx.lineTo(-4, 4);
+        ctx.moveTo(1, -5); ctx.lineTo(1, 5);
+        ctx.stroke();
+        ctx.fillStyle = '#292524';
+        ctx.beginPath(); ctx.arc(7, 0, 3, 0, Math.PI * 2); ctx.fill();
+      } else if (p.kind === 'fireball') {
         const glow = ctx.createRadialGradient(screen.x, screen.y, 1, screen.x, screen.y, p.radius * 2.2);
         glow.addColorStop(0, `rgba(254, 249, 195, ${alpha})`);
         glow.addColorStop(0.35, `rgba(249, 115, 22, ${0.95 * alpha})`);

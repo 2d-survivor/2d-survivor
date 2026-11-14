@@ -1,0 +1,464 @@
+[
+  {
+    "label": "center",
+    "dpr": 1,
+    "x": 0,
+    "y": 0,
+    "budgetMiB": 16,
+    "frames": {
+      "mean": 6.944367417677642,
+      "p95": 7,
+      "n": 577
+    },
+    "treeTime": {
+      "mean": 0.2991334488566971,
+      "p95": 0.5,
+      "n": 577
+    },
+    "floorTime": {
+      "mean": 0.624610052009854,
+      "p95": 0.900000000372529,
+      "n": 577
+    },
+    "renderTime": {
+      "mean": 1.2036395147539662,
+      "p95": 1.799999998882413,
+      "n": 577
+    },
+    "requests": 577,
+    "misses": 0,
+    "cacheBytes": 12960,
+    "visibleTrees": 1,
+    "visibleSpriteBytes": 12960,
+    "errors": []
+  },
+  {
+    "label": "top",
+    "dpr": 1,
+    "x": 0,
+    "y": -6700,
+    "budgetMiB": 16,
+    "frames": {
+      "mean": 16.260162601626018,
+      "p95": 20.899999999999636,
+      "n": 246
+    },
+    "treeTime": {
+      "mean": 5.152032520296431,
+      "p95": 6.700000001117587,
+      "n": 246
+    },
+    "floorTime": {
+      "mean": 0.5959349593177923,
+      "p95": 0.7999999988824129,
+      "n": 246
+    },
+    "renderTime": {
+      "mean": 6.2182926828859415,
+      "p95": 8.099999999627471,
+      "n": 246
+    },
+    "requests": 18204,
+    "misses": 18204,
+    "cacheBytes": 16428928,
+    "visibleTrees": 74,
+    "visibleSpriteBytes": 20821908,
+    "errors": []
+  },
+  {
+    "label": "bottom",
+    "dpr": 1,
+    "x": 0,
+    "y": 6700,
+    "budgetMiB": 16,
+    "frames": {
+      "mean": 15.293893129770993,
+      "p95": 20.899999999999636,
+      "n": 262
+    },
+    "treeTime": {
+      "mean": 4.781297710034569,
+      "p95": 6.399999998509884,
+      "n": 262
+    },
+    "floorTime": {
+      "mean": 0.5786259541472861,
+      "p95": 0.7000000011175871,
+      "n": 262
+    },
+    "renderTime": {
+      "mean": 5.859541984715762,
+      "p95": 7.699999999254942,
+      "n": 262
+    },
+    "requests": 19388,
+    "misses": 19388,
+    "cacheBytes": 16428928,
+    "visibleTrees": 74,
+    "visibleSpriteBytes": 20821908,
+    "errors": []
+  },
+  {
+    "label": "left",
+    "dpr": 1,
+    "x": -6700,
+    "y": 0,
+    "budgetMiB": 16,
+    "frames": {
+      "mean": 6.944540727902946,
+      "p95": 7,
+      "n": 577
+    },
+    "treeTime": {
+      "mean": 0.2856152513398558,
+      "p95": 0.40000000037252903,
+      "n": 577
+    },
+    "floorTime": {
+      "mean": 0.5402079722593882,
+      "p95": 0.7000000011175871,
+      "n": 577
+    },
+    "renderTime": {
+      "mean": 1.0625649913209305,
+      "p95": 1.400000000372529,
+      "n": 577
+    },
+    "requests": 28273,
+    "misses": 0,
+    "cacheBytes": 13985628,
+    "visibleTrees": 49,
+    "visibleSpriteBytes": 13985628,
+    "errors": []
+  },
+  {
+    "label": "right",
+    "dpr": 1,
+    "x": 6700,
+    "y": 0,
+    "budgetMiB": 16,
+    "frames": {
+      "mean": 6.944714038128254,
+      "p95": 7,
+      "n": 577
+    },
+    "treeTime": {
+      "mean": 0.28440207972851433,
+      "p95": 0.40000000037252903,
+      "n": 577
+    },
+    "floorTime": {
+      "mean": 0.5292894280704458,
+      "p95": 0.6999999992549419,
+      "n": 577
+    },
+    "renderTime": {
+      "mean": 1.0636048526785609,
+      "p95": 1.400000000372529,
+      "n": 577
+    },
+    "requests": 28273,
+    "misses": 0,
+    "cacheBytes": 13985628,
+    "visibleTrees": 49,
+    "visibleSpriteBytes": 13985628,
+    "errors": []
+  },
+  {
+    "label": "top-large-cache-diagnostic",
+    "dpr": 1,
+    "x": 0,
+    "y": -6700,
+    "budgetMiB": 128,
+    "frames": {
+      "mean": 6.944463667820066,
+      "p95": 7,
+      "n": 578
+    },
+    "treeTime": {
+      "mean": 0.3384083044976254,
+      "p95": 0.599999999627471,
+      "n": 578
+    },
+    "floorTime": {
+      "mean": 0.5368512110449503,
+      "p95": 0.7000000011175871,
+      "n": 578
+    },
+    "renderTime": {
+      "mean": 1.2200692041251795,
+      "p95": 1.700000001117587,
+      "n": 578
+    },
+    "requests": 42772,
+    "misses": 0,
+    "cacheBytes": 20821908,
+    "visibleTrees": 74,
+    "visibleSpriteBytes": 20821908,
+    "errors": []
+  },
+  {
+    "label": "bottom-large-cache-diagnostic",
+    "dpr": 1,
+    "x": 0,
+    "y": 6700,
+    "budgetMiB": 128,
+    "frames": {
+      "mean": 6.944540727902946,
+      "p95": 7,
+      "n": 577
+    },
+    "treeTime": {
+      "mean": 0.29792027723567116,
+      "p95": 0.40000000037252903,
+      "n": 577
+    },
+    "floorTime": {
+      "mean": 0.5336221837256252,
+      "p95": 0.6999999992549419,
+      "n": 577
+    },
+    "renderTime": {
+      "mean": 1.207972270393005,
+      "p95": 1.599999999627471,
+      "n": 577
+    },
+    "requests": 42698,
+    "misses": 0,
+    "cacheBytes": 20821908,
+    "visibleTrees": 74,
+    "visibleSpriteBytes": 20821908,
+    "errors": []
+  },
+  {
+    "label": "center",
+    "dpr": 2,
+    "x": 0,
+    "y": 0,
+    "budgetMiB": 16,
+    "frames": {
+      "mean": 30.007462686567166,
+      "p95": 34.80000000000018,
+      "n": 134
+    },
+    "treeTime": {
+      "mean": 0.36940298511632785,
+      "p95": 0.5,
+      "n": 134
+    },
+    "floorTime": {
+      "mean": 0.6999999999221581,
+      "p95": 0.900000000372529,
+      "n": 134
+    },
+    "renderTime": {
+      "mean": 1.649999999913818,
+      "p95": 2.400000000372529,
+      "n": 134
+    },
+    "requests": 134,
+    "misses": 0,
+    "cacheBytes": 51840,
+    "visibleTrees": 1,
+    "visibleSpriteBytes": 51840,
+    "errors": []
+  },
+  {
+    "label": "top",
+    "dpr": 2,
+    "x": 0,
+    "y": -6700,
+    "budgetMiB": 16,
+    "frames": {
+      "mean": 22.138121546961326,
+      "p95": 27.799999999999272,
+      "n": 181
+    },
+    "treeTime": {
+      "mean": 5.057458563527679,
+      "p95": 6.199999999254942,
+      "n": 181
+    },
+    "floorTime": {
+      "mean": 0.5928176795827091,
+      "p95": 0.8000000007450581,
+      "n": 181
+    },
+    "renderTime": {
+      "mean": 6.1436464088706515,
+      "p95": 7.400000000372529,
+      "n": 181
+    },
+    "requests": 13394,
+    "misses": 13394,
+    "cacheBytes": 16408432,
+    "visibleTrees": 74,
+    "visibleSpriteBytes": 83287632,
+    "errors": []
+  },
+  {
+    "label": "bottom",
+    "dpr": 2,
+    "x": 0,
+    "y": 6700,
+    "budgetMiB": 16,
+    "frames": {
+      "mean": 19.93532338308457,
+      "p95": 20.900000000001455,
+      "n": 201
+    },
+    "treeTime": {
+      "mean": 4.677611940294801,
+      "p95": 5.5,
+      "n": 201
+    },
+    "floorTime": {
+      "mean": 0.568656716440151,
+      "p95": 0.7000000011175871,
+      "n": 201
+    },
+    "renderTime": {
+      "mean": 5.739303482603745,
+      "p95": 6.599999999627471,
+      "n": 201
+    },
+    "requests": 14874,
+    "misses": 14874,
+    "cacheBytes": 16408432,
+    "visibleTrees": 74,
+    "visibleSpriteBytes": 83287632,
+    "errors": []
+  },
+  {
+    "label": "left",
+    "dpr": 2,
+    "x": -6700,
+    "y": 0,
+    "budgetMiB": 16,
+    "frames": {
+      "mean": 37.70747663551403,
+      "p95": 41.70000000000073,
+      "n": 107
+    },
+    "treeTime": {
+      "mean": 3.5102803737412547,
+      "p95": 4.599999999627471,
+      "n": 107
+    },
+    "floorTime": {
+      "mean": 0.6018691589516179,
+      "p95": 0.8000000007450581,
+      "n": 107
+    },
+    "renderTime": {
+      "mean": 4.548598130973422,
+      "p95": 5.699999999254942,
+      "n": 107
+    },
+    "requests": 5243,
+    "misses": 5243,
+    "cacheBytes": 16422208,
+    "visibleTrees": 49,
+    "visibleSpriteBytes": 55942512,
+    "errors": []
+  },
+  {
+    "label": "right",
+    "dpr": 2,
+    "x": 6700,
+    "y": 0,
+    "budgetMiB": 16,
+    "frames": {
+      "mean": 38.35999999999999,
+      "p95": 41.79999999999927,
+      "n": 105
+    },
+    "treeTime": {
+      "mean": 3.564761904591606,
+      "p95": 4.799999998882413,
+      "n": 105
+    },
+    "floorTime": {
+      "mean": 0.6247619049002727,
+      "p95": 0.8000000007450581,
+      "n": 105
+    },
+    "renderTime": {
+      "mean": 4.654285714367316,
+      "p95": 6.300000000745058,
+      "n": 105
+    },
+    "requests": 5145,
+    "misses": 5145,
+    "cacheBytes": 16422208,
+    "visibleTrees": 49,
+    "visibleSpriteBytes": 55942512,
+    "errors": []
+  },
+  {
+    "label": "top-large-cache-diagnostic",
+    "dpr": 2,
+    "x": 0,
+    "y": -6700,
+    "budgetMiB": 128,
+    "frames": {
+      "mean": 6.944194107452338,
+      "p95": 7.099999999998545,
+      "n": 577
+    },
+    "treeTime": {
+      "mean": 0.42045060657545846,
+      "p95": 0.599999999627471,
+      "n": 577
+    },
+    "floorTime": {
+      "mean": 0.5285961871976405,
+      "p95": 0.7000000011175871,
+      "n": 577
+    },
+    "renderTime": {
+      "mean": 1.2772963605272347,
+      "p95": 1.700000001117587,
+      "n": 577
+    },
+    "requests": 42698,
+    "misses": 0,
+    "cacheBytes": 83287632,
+    "visibleTrees": 74,
+    "visibleSpriteBytes": 83287632,
+    "errors": []
+  },
+  {
+    "label": "bottom-large-cache-diagnostic",
+    "dpr": 2,
+    "x": 0,
+    "y": 6700,
+    "budgetMiB": 128,
+    "frames": {
+      "mean": 6.944367417677645,
+      "p95": 7,
+      "n": 577
+    },
+    "treeTime": {
+      "mean": 0.38197573656910316,
+      "p95": 0.5,
+      "n": 577
+    },
+    "floorTime": {
+      "mean": 0.5131715771127202,
+      "p95": 0.6000000014901161,
+      "n": 577
+    },
+    "renderTime": {
+      "mean": 1.259272097020799,
+      "p95": 1.599999999627471,
+      "n": 577
+    },
+    "requests": 42698,
+    "misses": 0,
+    "cacheBytes": 83287632,
+    "visibleTrees": 74,
+    "visibleSpriteBytes": 83287632,
+    "errors": []
+  }
+]

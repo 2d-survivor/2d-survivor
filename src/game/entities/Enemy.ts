@@ -129,6 +129,10 @@ export class Enemy {
   public pendingThornRoots: boolean = false;
   public pendingStomp: boolean = false;
   public pendingRoar: boolean = false;
+  public mapinguariRoarCooldown = 3;
+  public mapinguariBeeCooldown = 4;
+  public mapinguariRoarPulse = 0;
+  public pendingBeeSwarm = 0;
   // Cobra-Grande (long lunges) and Boitatá (fire trail + radial fireballs).
   public emberTrailTimer: number = 0;
   public pendingFireRing: number = 0;
@@ -1184,6 +1188,23 @@ export class Enemy {
       }
     }
 
+    if (this.type === 'boss_mapinguari') {
+      this.mapinguariRoarPulse = Math.max(0, this.mapinguariRoarPulse - dt);
+      if (dist > 760 || this.hp <= 0) return;
+      this.mapinguariRoarCooldown -= dt;
+      this.mapinguariBeeCooldown -= dt;
+      if (this.mapinguariRoarCooldown <= 0) {
+        this.pendingRoar = true;
+        this.mapinguariRoarCooldown += 3;
+        this.mapinguariRoarPulse = 0.4;
+      }
+      if (this.mapinguariBeeCooldown <= 0) {
+        this.pendingBeeSwarm = 6;
+        this.mapinguariBeeCooldown += 4;
+      }
+      return;
+    }
+
     this.skillCooldown -= dt * speedMult;
     if (this.skillCooldown > 0 || dist > 760) return;
 
@@ -1239,13 +1260,7 @@ export class Enemy {
         this.pendingThornRoots = true;
       }
       this.skillCooldown = 3.2;
-    } else if (this.type === 'boss_mapinguari') {
-      if (this.bossSkillIndex % 2 === 0) {
-        this.pendingStomp = true;
-      } else {
-        this.pendingRoar = true;
-      }
-      this.skillCooldown = 3.4;
+
     } else if (this.type === 'boss_boitata') {
       // Alternates a radial fire burst with a wide fan of fireballs.
       if (this.bossSkillIndex % 2 === 0) {
@@ -1396,6 +1411,18 @@ export class Enemy {
         ctx.lineWidth = this.radius * 2;
         ctx.lineCap = 'round';
       }
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (this.type === 'boss_mapinguari' && (this.mapinguariRoarCooldown <= 0.5 || this.mapinguariRoarPulse > 0)) {
+      ctx.save();
+      ctx.fillStyle = this.mapinguariRoarPulse > 0 ? 'rgba(245,158,11,0.25)' : 'rgba(245,158,11,0.08)';
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, 450, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.restore();
