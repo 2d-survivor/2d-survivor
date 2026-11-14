@@ -168,9 +168,9 @@ export class Enemy {
       case 'boss_kopenawa':
         this.name = 'Kopenawa — Guardião da Floresta Ilusória';
         this.radius = 24;
-        this.maxHp = Math.round(12000 * hpMultiplier);
+        this.maxHp = Math.round(6500 * hpMultiplier);
         this.speed = 94;
-        this.damage = 34;
+        this.damage = 24;
         this.xpValue = 600;
         this.isBoss = true;
         this.knockbackResistance = 0.05;

@@ -367,7 +367,7 @@ export class KopenawaBoss extends ChallengeBoss {
 }
 
 /**
- * A smoke illusion that inherits 70% of Kopenawa's combat stats and attacks.
+ * A smoke illusion that inherits 50% of Kopenawa's combat stats and attacks.
  * It shares his breath cone and spirit bolt, but never summons further clones.
  */
 export class KopenawaClone extends Enemy {
@@ -402,7 +402,7 @@ export class KopenawaClone extends Enemy {
     this.isElite = false;
     this.knockbackResistance = source.knockbackResistance * inheritance;
     this.skillCooldown = Number.MAX_SAFE_INTEGER;
-    // Clones inherit 70% of the boss's 3x attack cadence (2.1x base speed).
+    // Clones inherit 50% of the boss's 3x attack cadence (1.5x base speed).
     this.attackSpeed = KOPENAWAS.attackSpeedMultiplier * inheritance;
     this.breathCooldown = 2.2 / this.attackSpeed;
     this.spiritBoltCooldown = KOPENAWAS.spiritBolt.initialCooldown / this.attackSpeed;

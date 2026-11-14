@@ -3,32 +3,34 @@
 export const KOPENAWAS = {
   triggerRadius: 300,
   arenaRadius: 600,
-  hp: 12000,
+  hp: 6500,
   speed: 94,
-  damage: 34,
+  damage: 24,
   radius: 24,
   xpValue: 600,
   // The old sage attacks three times faster than his original rhythm.
   attackSpeedMultiplier: 3,
-  // His smoke illusions inherit 70% of every combat stat and ability.
-  cloneStatMultiplier: 0.7,
+  // His smoke illusions inherit 50% of every combat stat and ability.
+  cloneStatMultiplier: 0.5,
   breath: {
-    cooldown: 5.2,
+    // Stored before the attack-speed multiplier: 13.5 / 3 = 4.5 s effective.
+    cooldown: 13.5,
     warning: 0.7,
     duration: 0.9,
     range: 460,
     halfAngle: Math.PI / 7,
-    damageMultiplier: 0.8,
-    transeDuration: 3.5,
+    damageMultiplier: 20 / 24,
+    transeDuration: 1.5,
   },
   spiritBolt: {
     initialCooldown: 2.4,
-    cooldown: 4.6,
+    // Stored before the attack-speed multiplier: 10.5 / 3 = 3.5 s effective.
+    cooldown: 10.5,
     speed: 265,
     radius: 12,
     life: 4.5,
-    damageMultiplier: 0.6,
-    confusionDuration: 4,
+    damageMultiplier: 16 / 24,
+    confusionDuration: 2,
   },
   smoke: {
     threshold: 0.5,
