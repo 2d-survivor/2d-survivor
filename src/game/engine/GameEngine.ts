@@ -35,7 +35,7 @@ import { AnacondaBoss } from '../entities/AnacondaBoss';
 import { AnacondaNpc } from '../entities/AnacondaNpc';
 import { EquipmentDrop } from '../entities/EquipmentDrop';
 import { ANACONDA } from '../data/anaconda';
-import { GORILLA_ARENA, GORILLA_LEAP, GORILLA_ROAR } from '../data/gorilla';
+import { GORILLA_ARENA, GORILLA_LEAP, GORILLA_ROAR, GORILLA_SLAM_DAMAGE_MULTIPLIER } from '../data/gorilla';
 import { KOPENAWAS } from '../data/kopenawa';
 import { Drop } from '../entities/Drops';
 import { VFXManager } from '../entities/VFX';
@@ -1166,7 +1166,8 @@ export class GameEngine {
         if (Math.hypot(this.player.x - e.x, this.player.y - e.y) <= leap.radius + this.player.radius &&
           !this.player.isJumping && !this.player.godMode && this.player.invulnerableTimer <= 0) {
           const hp = this.player.hp;
-          const fatal = this.applyPlayerDamage(e.damage, true, true);
+          const leapDamage = Math.max(1, Math.round(e.damage * leap.damageMultiplier));
+          const fatal = this.applyPlayerDamage(leapDamage, true, true);
           if (this.player.hp < hp) this.player.applyStun(leap.stun);
           if (fatal) { this.handlePlayerDeath(); return; }
         }
@@ -1210,7 +1211,8 @@ export class GameEngine {
         const ndx = this.player.x - e.x;
         const ndy = this.player.y - e.y;
         if (Math.sqrt(ndx * ndx + ndy * ndy) <= e.novaRadius + this.player.radius) {
-          const novaDmg = Math.max(1, Math.round(e.damage * 0.85));
+          const novaMultiplier = e instanceof GorillaBoss ? GORILLA_SLAM_DAMAGE_MULTIPLIER : 0.85;
+          const novaDmg = Math.max(1, Math.round(e.damage * novaMultiplier));
           const fatal = this.applyPlayerDamage(novaDmg, true, false);
           if (fatal) {
             this.handlePlayerDeath();

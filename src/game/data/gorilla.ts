@@ -18,17 +18,19 @@ export const GORILLA_LEAP = {
   radius: 95,
   stun: 1,
   range: 800,
+  damageMultiplier: 30 / 32,
 };
 
 export const GORILLA_SLAM_COOLDOWN = 3.75;
+export const GORILLA_SLAM_DAMAGE_MULTIPLIER = 26 / 32;
 
 export const GORILLA_ROAR = {
   cooldown: 15,
   warning: 0.8 / GORILLA_SKILL_SPEED,
   duration: 5,
   radius: 800,
-  healFraction: 0.2,
-  damageMultiplier: 0.5,
+  healFraction: 0.1,
+  damageMultiplier: 14 / 32,
 };
 
 // The guardian awakens as soon as the hero steps into its line of sight.

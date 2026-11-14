@@ -7,7 +7,7 @@ import { Player } from '@/game/entities/Player';
 import { Camera } from '@/game/engine/Camera';
 import { CHARACTERS } from '@/game/data/characters';
 import { LULA_SKILL, WEAPON_REGISTRY } from '@/game/data/upgrades';
-import { GORILLA_CHARGE, GORILLA_LEAP, GORILLA_ROAR, GORILLA_SLAM_COOLDOWN } from '@/game/data/gorilla';
+import { GORILLA_CHARGE, GORILLA_LEAP, GORILLA_ROAR, GORILLA_SLAM_COOLDOWN, GORILLA_SLAM_DAMAGE_MULTIPLIER } from '@/game/data/gorilla';
 import { ANACONDA } from '@/game/data/anaconda';
 import { KOPENAWAS } from '@/game/data/kopenawa';
 import { FOREST_ARMOR, GUARDIAN_BOW } from '@/game/data/inventory';
@@ -420,12 +420,12 @@ function getGuardianGuide(): GuardianEntry[] {
         },
         {
           name: 'Salto triplo',
-          damage: `${formatGuideNumber(gorilla.damage)} por impacto`,
+          damage: `${formatGuideNumber(Math.round(gorilla.damage * GORILLA_LEAP.damageMultiplier))} por impacto`,
           cooldown: formatSeconds(GORILLA_LEAP.cooldown),
         },
         {
           name: 'Impacto no solo',
-          damage: formatGuideNumber(Math.round(gorilla.damage * 0.85)),
+          damage: formatGuideNumber(Math.round(gorilla.damage * GORILLA_SLAM_DAMAGE_MULTIPLIER)),
           cooldown: formatSeconds(GORILLA_SLAM_COOLDOWN),
         },
         {
