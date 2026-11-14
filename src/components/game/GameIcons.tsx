@@ -105,8 +105,6 @@ export function renderPassiveIcon(id: PassiveId, sizeClass: string = 'w-4 h-4'):
       return <Heart className={`${sizeClass} text-rose-400`} />;
     case 'tome':
       return <Clock className={`${sizeClass} text-purple-400`} />;
-    case 'magnet':
-      return <Magnet className={`${sizeClass} text-amber-400`} />;
     case 'bracer':
       return <Crosshair className={`${sizeClass} text-red-400`} />;
     case 'lantern':
@@ -123,8 +121,6 @@ export function renderPassiveIcon(id: PassiveId, sizeClass: string = 'w-4 h-4'):
       return <Biohazard className={`${sizeClass} text-teal-400`} />;
     case 'casco_tartaruga':
       return <Shield className={`${sizeClass} text-emerald-500`} />;
-    case 'essencia_acai':
-      return <Magnet className={`${sizeClass} text-purple-400`} />;
     case 'energia_guarana':
       return <Feather className={`${sizeClass} text-red-400`} />;
     case 'raiz_ginseng':

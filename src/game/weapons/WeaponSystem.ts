@@ -188,7 +188,6 @@ const ALL_PASSIVE_IDS: PassiveId[] = [
   'wings',
   'heart',
   'tome',
-  'magnet',
   'bracer',
   'lantern',
   'clover',
@@ -198,7 +197,7 @@ const ALL_PASSIVE_IDS: PassiveId[] = [
   'bio_shield',
 ];
 
-/** Amazon Forest catalogue: 15 attacks + 10 buffs, all capped at level 10. */
+/** Amazon Forest catalogue: 15 attacks + 9 buffs, all capped at level 10. */
 const AMAZON_WEAPON_IDS: WeaponId[] = [
   'garras_onca',
   'espinhos_pupunha',
@@ -219,7 +218,6 @@ const AMAZON_WEAPON_IDS: WeaponId[] = [
 
 const AMAZON_PASSIVE_IDS: PassiveId[] = [
   'casco_tartaruga',
-  'essencia_acai',
   'energia_guarana',
   'raiz_ginseng',
   'casca_marupa',
@@ -463,7 +461,7 @@ export class WeaponSystem {
     player.goldMultiplier = 1.0 + (perm.greed || 0) * 0.15;
     player.speed = player.baseSpeed * (1 + player.objectiveSpeedBonus + player.lulaLevelMovementBonus);
 
-    // Apply all 12 passives
+    // Apply all base passives
     const spinach = this.passives.get('spinach');
     if (spinach) player.might += spinach.level * 0.1;
 
@@ -478,9 +476,6 @@ export class WeaponSystem {
 
     const tome = this.passives.get('tome');
     if (tome) player.cooldownReduction += tome.level * 0.07;
-
-    const magnet = this.passives.get('magnet');
-    if (magnet) player.pickupRadius += magnet.level * 22;
 
     const bracer = this.passives.get('bracer');
     if (bracer) {
@@ -526,12 +521,6 @@ export class WeaponSystem {
     // Amazon Forest buffs
     const cascoTartaruga = this.passives.get('casco_tartaruga');
     if (cascoTartaruga) player.armor += cascoTartaruga.level;
-
-    const essenciaAcai = this.passives.get('essencia_acai');
-    if (essenciaAcai) {
-      player.pickupRadius += essenciaAcai.level * 18;
-      player.xpMultiplier += essenciaAcai.level * 0.04;
-    }
 
     const energiaGuarana = this.passives.get('energia_guarana');
     if (energiaGuarana) player.speed *= 1 + energiaGuarana.level * 0.05;

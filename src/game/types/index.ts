@@ -52,7 +52,6 @@ export type EvolvedWeaponId =
 
 export type AmazonPassiveId =
   | 'casco_tartaruga'
-  | 'essencia_acai'
   | 'energia_guarana'
   | 'raiz_ginseng'
   | 'casca_marupa'
@@ -67,7 +66,6 @@ export type PassiveId =
   | 'wings'
   | 'heart'
   | 'tome'
-  | 'magnet'
   | 'bracer'
   | 'lantern'
   | 'clover'
