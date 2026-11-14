@@ -216,7 +216,6 @@ console.log('PASS: 5 rain ticks + 2 lingering ticks, no stacked DPS, single 20% 
   const next = engine().e; next.player.x = C.x + 180; next.player.y = C.y; next.startAnacondaCombat();
   const boss = next.enemies[0]; boss.hp = 0; next.onEnemyKilled(boss); next.update(0.01);
   assert.equal(next.drops.some(d => d instanceof EquipmentDrop), false);
-  const night = engine('night_plain').e; assert.equal(night.anacondaNpc, null); assert.equal(night.startAnacondaCombat(), false);
 }
 console.log('PASS: E dialogue, exclusive/frozen waves, cancellation, reset, restored mobs, physical glove and duplicate protection');
 

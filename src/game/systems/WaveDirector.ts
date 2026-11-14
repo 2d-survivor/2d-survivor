@@ -85,7 +85,7 @@ export class WaveDirector {
 
   constructor(
     difficulty: DifficultyConfig,
-    mapId: MapId = 'night_plain',
+    mapId: MapId = 'amazon_forest',
     worldProps: WorldSystem | null = null
   ) {
     this.difficulty = difficulty;
@@ -228,43 +228,24 @@ export class WaveDirector {
       onSpawn(amazonElite);
     }
 
-    // Timed Events (4 Elite Chests before 05:00 + Final Boss + Endless Loop)
+    // Timed Events (4 Elite Chests before 05:00 + Amazon boss waves + Endless Loop)
     const sec = Math.floor(this.survivalTime);
 
-    // Event 1: 01:00 - Bat / Bullet-Ant Swarm + Vanguard Elite (#1 Chest)
+    // Event 1: 01:00 - Bullet-Ant Swarm + Vanguard Elite (#1 Chest)
     if (sec >= 60 && !this.triggeredEvents.has('wave_60')) {
       this.triggeredEvents.add('wave_60');
-      this.triggerAlert(
-        this.isAmazonForest
-          ? '🐜 ENXAME DE FORMIGAS-BALA E GUARDA ELITE SURGIRAM!'
-          : '🦇 ENXAME DE MORCEGOS E GUARDA ELITE SURGIRAM!',
-        4.5
-      );
+      this.triggerAlert('🐜 ENXAME DE FORMIGAS-BALA E GUARDA ELITE SURGIRAM!', 4.5);
       sound.playBossWarning();
-      this.spawnSwarm(player, camera, this.isAmazonForest ? 'bullet_ant' : 'bat', onSpawn);
+      this.spawnSwarm(player, camera, 'bullet_ant', onSpawn);
       this.spawnElite(player, camera, hpMultiplier * 0.75, 'Capitão da Guarda Elite', onSpawn);
     }
 
-    // Event 2: 02:00 - Minotaur Elite (#2 Chest, night plain only). The
-    // Amazon Forest never spawns the Minotaur or any of its variations.
-    if (!this.isAmazonForest && sec >= 120 && !this.triggeredEvents.has('wave_120')) {
-      this.triggeredEvents.add('wave_120');
-      this.triggerAlert('⚔️ MINOTAURO ELITE SURGIU! DERROTE-O PARA EVOLUIR NO BAÚ!', 5);
-      sound.playBossWarning();
-      this.spawnElite(player, camera, hpMultiplier, 'Minotauro Elite', onSpawn);
-    }
-
-    // Event 3: 03:00 - Zombie / Leafcutter-Ant Ring + Butcher Elite (#3 Chest)
+    // Event 3: 03:00 - Leafcutter-Ant Ring + Butcher Elite (#3 Chest)
     if (sec >= 180 && !this.triggeredEvents.has('wave_180')) {
       this.triggeredEvents.add('wave_180');
-      this.triggerAlert(
-        this.isAmazonForest
-          ? '🐜 CERCO DE FORMIGAS-CORTADEIRAS COM CARNICEIRO ELITE!'
-          : '💀 CERCO DE ZUMBIS COM CARNICEIRO ELITE!',
-        4.5
-      );
+      this.triggerAlert('🐜 CERCO DE FORMIGAS-CORTADEIRAS COM CARNICEIRO ELITE!', 4.5);
       sound.playBossWarning();
-      this.spawnRingEnemies(player, hpMultiplier, this.isAmazonForest ? 'leafcutter_ant' : 'zombie', onSpawn);
+      this.spawnRingEnemies(player, hpMultiplier, 'leafcutter_ant', onSpawn);
       this.spawnElite(player, camera, hpMultiplier * 1.05, 'Carniceiro Elite', onSpawn);
     }
 
@@ -279,7 +260,7 @@ export class WaveDirector {
       }
     }
 
-    // Event 5: 05:00 - Amazon boss waves every 90s (night plain keeps its final boss).
+    // Event 5: 05:00 - Amazon boss waves every 90s.
     // Easy and Normal spawn the 10 folklore bosses solo, ending with Boitatá at
     // 18:30. Hard, Nightmare and Infernal instead bring the fixed elemental
     // combos together. After the 10th wave only the elite hordes below spawn.
@@ -307,39 +288,17 @@ export class WaveDirector {
       sound.playBossWarning();
     }
 
-    // Event 5: 05:00 - Final Boss: Senhor da Corrupção! (night plain only)
-    if (!this.isAmazonForest && sec >= 300 && !this.triggeredEvents.has('final_boss')) {
-      this.triggeredEvents.add('final_boss');
-      this.triggerAlert('👑 SENHOR DA CORRUPÇÃO SURGIU! DERROTE-O PARA VENCER!', 6);
-      sound.playBossWarning();
-      const boss = this.spawnBoss(player, camera, hpMultiplier, onSpawn);
-      this.bossActive = boss;
-    }
-
-    // Endless Mode Events (> 05:00): Every 60s Elite + Wave, Every 180s Reincarnated Boss!
+    // Endless Mode Events (> 05:00): Every 60s Elite + Wave.
     if (this.isEndless && sec >= 360) {
       const minuteMark = Math.floor(sec / 60);
       const endlessKey = `endless_min_${minuteMark}`;
       if (!this.triggeredEvents.has(endlessKey)) {
         this.triggeredEvents.add(endlessKey);
         sound.playBossWarning();
-
-        if (!this.isAmazonForest && (minuteMark - 5) % 3 === 0 && !this.bossActive) {
-          this.triggerAlert(`👑 REENCARNAÇÃO DO SENHOR DA CORRUPÇÃO (MINUTO ${minuteMark})!`, 5.5);
-          const boss = this.spawnBoss(player, camera, hpMultiplier * 1.15, onSpawn);
-          this.bossActive = boss;
-        } else {
-          this.triggerAlert(`🔥 ONDA INFINITA DO MINUTO ${minuteMark}: CAÇADORES ELITE!`, 4.5);
-          const ringType: EnemyType = this.isAmazonForest
-            ? minuteMark % 2 === 0
-              ? 'blue_butterfly'
-              : 'cicada'
-            : minuteMark % 2 === 0
-              ? 'ghost'
-              : 'skeleton';
-          this.spawnRingEnemies(player, hpMultiplier * 0.95, ringType, onSpawn);
-          this.spawnElite(player, camera, hpMultiplier * 1.1, 'Executor Abissal Elite', onSpawn);
-        }
+        this.triggerAlert(`🔥 ONDA INFINITA DO MINUTO ${minuteMark}: CAÇADORES ELITE!`, 4.5);
+        const ringType: EnemyType = minuteMark % 2 === 0 ? 'blue_butterfly' : 'cicada';
+        this.spawnRingEnemies(player, hpMultiplier * 0.95, ringType, onSpawn);
+        this.spawnElite(player, camera, hpMultiplier * 1.1, 'Executor Abissal Elite', onSpawn);
       }
     }
   }
@@ -397,55 +356,42 @@ export class WaveDirector {
     const pos = this.getSpawnPositionOutsideScreen(camera);
     const minutes = this.survivalTime / 60;
 
-    let type: Enemy['type'] = 'bat';
-    const roll = Math.random();
+    // The forest starts with its fast basic fauna and gradually mixes in
+    // tougher medium threats, then slow high-HP resistant fauna.
+    const mediumChance = Math.min(0.55, Math.max(0, (minutes - 0.5) * 0.16));
+    const resistantChance = Math.min(0.3, Math.max(0, (minutes - 2) * 0.07));
+    const isResistant = Math.random() < resistantChance;
+    const isMedium = !isResistant && Math.random() < mediumChance;
 
-    if (this.isAmazonForest) {
-      // The forest starts with its fast basic fauna and gradually mixes in
-      // tougher medium threats, then slow high-HP resistant fauna.
-      const mediumChance = Math.min(0.55, Math.max(0, (minutes - 0.5) * 0.16));
-      const resistantChance = Math.min(0.3, Math.max(0, (minutes - 2) * 0.07));
-      const isResistant = Math.random() < resistantChance;
-      const isMedium = !isResistant && Math.random() < mediumChance;
-
-      // A share of the forest waves comes from the river fauna. The spawn is
-      // only accepted when the off-screen point is genuinely over water.
-      if (Math.random() < 0.28) {
-        const aquaticPool = isResistant
-          ? AMAZON_AQUATIC_RESISTANT_ENEMIES
-          : isMedium
-            ? AMAZON_AQUATIC_MEDIUM_ENEMIES
-            : AMAZON_AQUATIC_BASIC_ENEMIES;
-        const aquaticType = aquaticPool[Math.floor(Math.random() * aquaticPool.length)];
-        const aquaticPos = this.getWaterSpawnPosition(camera, 24);
-        if (aquaticPos) {
-          onSpawn(this.createEnemy(aquaticType, aquaticPos.x, aquaticPos.y, hpMult));
-          return;
-        }
-      }
-
-      const pool = isResistant
-        ? AMAZON_RESISTANT_ENEMIES
+    // A share of the forest waves comes from the river fauna. The spawn is
+    // only accepted when the off-screen point is genuinely over water.
+    if (Math.random() < 0.28) {
+      const aquaticPool = isResistant
+        ? AMAZON_AQUATIC_RESISTANT_ENEMIES
         : isMedium
-          ? AMAZON_MEDIUM_ENEMIES
-          : AMAZON_BASIC_ENEMIES;
-      type = pool[Math.floor(Math.random() * pool.length)];
-    } else if (minutes < 1) {
-      type = roll < 0.68 ? 'bat' : roll < 0.9 ? 'skeleton' : 'zombie';
-    } else if (minutes < 2) {
-      type = roll < 0.35 ? 'bat' : roll < 0.78 ? 'skeleton' : 'zombie';
-    } else if (minutes < 3.5) {
-      type = roll < 0.28 ? 'skeleton' : roll < 0.65 ? 'ghost' : 'zombie';
-    } else {
-      type = roll < 0.22 ? 'bat' : roll < 0.52 ? 'ghost' : roll < 0.78 ? 'skeleton' : 'zombie';
+          ? AMAZON_AQUATIC_MEDIUM_ENEMIES
+          : AMAZON_AQUATIC_BASIC_ENEMIES;
+      const aquaticType = aquaticPool[Math.floor(Math.random() * aquaticPool.length)];
+      const aquaticPos = this.getWaterSpawnPosition(camera, 24);
+      if (aquaticPos) {
+        onSpawn(this.createEnemy(aquaticType, aquaticPos.x, aquaticPos.y, hpMult));
+        return;
+      }
     }
+
+    const pool = isResistant
+      ? AMAZON_RESISTANT_ENEMIES
+      : isMedium
+        ? AMAZON_MEDIUM_ENEMIES
+        : AMAZON_BASIC_ENEMIES;
+    const type = pool[Math.floor(Math.random() * pool.length)];
 
     onSpawn(this.createEnemy(type, pos.x, pos.y, hpMult));
   }
 
-  /** Enemy type spawned by boss summon skills: bats elsewhere, bullet ants in the forest. */
+  /** Enemy type spawned by boss summon skills in the forest. */
   public getMinionEnemyType(): EnemyType {
-    return this.isAmazonForest ? 'bullet_ant' : 'bat';
+    return 'bullet_ant';
   }
 
   public createEnemy(type: EnemyType, x: number, y: number, hpMult: number): Enemy {
@@ -505,11 +451,8 @@ export class WaveDirector {
     onSpawn: (enemy: Enemy) => void
   ): void {
     const pos = this.getSpawnPositionOutsideScreen(camera);
-    // The Minotaur base enemy is exclusive to the night plain. In the Amazon
-    // Forest the timed elite slots use the forest's own oversized predators.
-    const eliteType = this.isAmazonForest
-      ? AMAZON_ELITE_ENEMIES[Math.floor(Math.random() * AMAZON_ELITE_ENEMIES.length)]
-      : 'elite_minotaur';
+    // The timed elite slots use the forest's own oversized predators.
+    const eliteType = AMAZON_ELITE_ENEMIES[Math.floor(Math.random() * AMAZON_ELITE_ENEMIES.length)];
     const elite = this.createEnemy(eliteType, pos.x, pos.y, hpMult);
     elite.name = customName;
     onSpawn(elite);
@@ -611,15 +554,4 @@ export class WaveDirector {
     }
   }
 
-  private spawnBoss(
-    player: Player,
-    camera: Camera,
-    hpMult: number,
-    onSpawn: (enemy: Enemy) => void
-  ): Enemy {
-    const pos = this.getSpawnPositionOutsideScreen(camera);
-    const boss = this.createEnemy('boss_vampire', pos.x, pos.y, hpMult);
-    onSpawn(boss);
-    return boss;
-  }
 }

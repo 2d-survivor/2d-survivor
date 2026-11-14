@@ -1,13 +1,9 @@
 import { Camera } from '../engine/Camera';
 import { Player } from '../entities/Player';
-import { Drop } from '../entities/Drops';
 import { ForestCave } from '../entities/ForestCave';
-import { DropType, MapId } from '../types';
+import { MapId } from '../types';
 import { StaticSpatialIndex } from '../engine/StaticSpatialIndex';
 
-// The night plain is effectively open, so this is only a large safety limit
-// that prevents the player from wandering out of the coordinate space.
-const WORLD_HALF_SIZE = 100000;
 // The Amazon Forest is a finite 14000x14000 map centered on the origin.
 const FOREST_SIZE = 14000;
 const FOREST_HALF_SIZE = FOREST_SIZE / 2;
@@ -125,15 +121,6 @@ export const MUD_OTTER_SPEED_MULTIPLIER = 1.2;
 const FOREST_GROUND_TILE = 320;
 const SAND_GRAIN_TILE = 160;
 const WATER_SHIMMER_TILE = 192;
-
-export interface TorchProp {
-  id: number;
-  x: number;
-  y: number;
-  radius: number;
-  animTimer: number;
-  buff: DropType;
-}
 
 export type FruitTreeKind =
   | 'acai'
@@ -360,14 +347,7 @@ export class WorldSystem {
     this.forestCave?.unlock();
   }
 
-  public torches: TorchProp[] = [];
-  private nextTorchId: number = 1;
-  private torchSpawnTimer: number = 0;
-  private maxTorches: number = 6;
-  private readonly torchSpawnInterval: number = 13;
-
   private mapId: MapId;
-  private worldHalfSize: number = WORLD_HALF_SIZE;
   public fruitTrees: FruitTreeProp[] = [];
   private nextFruitTreeId: number = 1;
   public thornBushes: ThornBushProp[] = [];
@@ -400,8 +380,6 @@ export class WorldSystem {
   private readonly foregroundCanopies: DecorTreeProp[] = [];
   private readonly riverPaths = new Map<string, Path2D>();
 
-  private floorImage: HTMLImageElement | null = null;
-  private floorPattern: CanvasPattern | null = null;
   private forestGroundPattern: CanvasPattern | null = null;
   private sandGrainPattern: CanvasPattern | null = null;
   private waterShimmerPattern: CanvasPattern | null = null;
@@ -426,27 +404,23 @@ export class WorldSystem {
   // physically seals the lake until the duel ends.
   private anacondaArenaActive: boolean = false;
 
-  constructor(mapId: MapId = 'night_plain') {
+  constructor(mapId: MapId = 'amazon_forest') {
     this.mapId = mapId;
-    this.forestCave = mapId === 'amazon_forest' ? new ForestCave() : null;
-    if (mapId === 'amazon_forest') {
-      this.worldHalfSize = FOREST_HALF_SIZE;
-      this.generatePlateaus();
-      this.generateForest();
-      this.spawnInitialFruitTrees();
-      this.spawnFieldPlants();
-      const outsideCamp = (prop: { x: number; y: number }) => !this.isInHunterClearing(prop.x, prop.y);
-      this.trees = this.trees.filter(outsideCamp);
-      this.decorTrees = this.decorTrees.filter(outsideCamp);
-      this.fruitTrees = this.fruitTrees.filter(outsideCamp);
-      this.thornBushes = this.thornBushes.filter(outsideCamp);
-      this.herbs = this.herbs.filter(outsideCamp);
-      this.rocks = this.rocks.filter(outsideCamp);
-      this.palms = this.palms.filter(outsideCamp);
-      this.ferns = this.ferns.filter(outsideCamp);
-      this.groundTufts = this.groundTufts.filter(outsideCamp);
-    }
-    this.loadFloorTexture();
+    this.forestCave = new ForestCave();
+    this.generatePlateaus();
+    this.generateForest();
+    this.spawnInitialFruitTrees();
+    this.spawnFieldPlants();
+    const outsideCamp = (prop: { x: number; y: number }) => !this.isInHunterClearing(prop.x, prop.y);
+    this.trees = this.trees.filter(outsideCamp);
+    this.decorTrees = this.decorTrees.filter(outsideCamp);
+    this.fruitTrees = this.fruitTrees.filter(outsideCamp);
+    this.thornBushes = this.thornBushes.filter(outsideCamp);
+    this.herbs = this.herbs.filter(outsideCamp);
+    this.rocks = this.rocks.filter(outsideCamp);
+    this.palms = this.palms.filter(outsideCamp);
+    this.ferns = this.ferns.filter(outsideCamp);
+    this.groundTufts = this.groundTufts.filter(outsideCamp);
     // Generation deliberately uses the original scans while the scenery is growing.
     this.treeIndex = new StaticSpatialIndex(this.trees, tree => ({ x: tree.x, y: tree.y, radius: tree.size * 0.32 }));
     this.decorTreeIndex = new StaticSpatialIndex(this.decorTrees, tree => ({ x: tree.x, y: tree.y, radius: this.getDecorTreeCollisionRadius(tree) }));
@@ -2241,14 +2215,10 @@ export class WorldSystem {
 
   /**
    * World span (in world units) shown across the minimap. For the finite
-   * Amazon map this covers about 30% of the total map area; the night plain
-   * has no real bounds, so a practical radar range is used instead.
+   * Amazon map this covers about 30% of the total map area.
    */
   public getMinimapViewSpan(): number {
-    if (this.mapId === 'amazon_forest') {
-      return FOREST_SIZE * Math.sqrt(0.3);
-    }
-    return 2600;
+    return FOREST_SIZE * Math.sqrt(0.3);
   }
 
   /**
@@ -2555,16 +2525,6 @@ export class WorldSystem {
       ctx.drawImage(icon, drawX, drawY, drawSize, drawSize);
       ctx.restore();
     }
-  }
-
-  private loadFloorTexture(): void {
-    if (typeof window === 'undefined') return;
-    const image = new Image();
-    image.onload = () => {
-      this.floorImage = image;
-      this.floorPattern = null;
-    };
-    image.src = '/grass-texture.jpg';
   }
 
   private getAcaiPixelSprite(): HTMLCanvasElement | null {
@@ -4836,14 +4796,6 @@ export class WorldSystem {
     return canvas;
   }
 
-  private rollTorchBuff(): DropType {
-    // Healing (chicken) is intentionally excluded from lamps.
-    const roll = Math.random();
-    if (roll < 0.72) return 'coin';
-    if (roll < 0.94) return 'magnet';
-    return 'rosary';
-  }
-
   /**
    * Moves the player by (dx, dy) while preventing it from crossing trees or
    * leaving the playable area. The movement is sub-stepped so fast impulses
@@ -4863,7 +4815,7 @@ export class WorldSystem {
     const steps = Math.max(1, Math.ceil(distance / COLLISION_STEP));
     const stepX = dx / steps;
     const stepY = dy / steps;
-    const limit = this.worldHalfSize - radius;
+    const limit = FOREST_HALF_SIZE - radius;
     let x = fromX;
     let y = fromY;
 
@@ -4981,51 +4933,10 @@ export class WorldSystem {
     return false;
   }
 
-  update(dt: number, player: Player, onBuffSpawn?: (drop: Drop) => void): void {
+  update(dt: number): void {
     this.waterAnimTimer += dt;
 
-    // Torches/candles belong to the night plain. The Amazon Forest only keeps
-    // its fruit trees as collectible resources, so no torch ever spawns there.
-    if (this.mapId !== 'amazon_forest') {
-      this.torchSpawnTimer += dt;
-
-      // Spawn new torches periodically near player
-      if (this.torchSpawnTimer > this.torchSpawnInterval && this.torches.length < this.maxTorches) {
-        this.torchSpawnTimer = 0;
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 350 + Math.random() * 250;
-        const x = player.x + Math.cos(angle) * dist;
-        const y = player.y + Math.sin(angle) * dist;
-        const buff = this.rollTorchBuff();
-
-        this.torches.push({
-          id: this.nextTorchId++,
-          x,
-          y,
-          radius: 12,
-          animTimer: Math.random() * 5,
-          buff,
-        });
-
-        // The lamp already carries its random buff when it spawns.
-        onBuffSpawn?.(new Drop(Date.now() + Math.random(), buff, x, y));
-      }
-
-      // Clean up torches that are way too far away (> 1500 px)
-      for (let i = this.torches.length - 1; i >= 0; i--) {
-        const t = this.torches[i];
-        t.animTimer += dt * 6;
-
-        const dx = player.x - t.x;
-        const dy = player.y - t.y;
-        if (dx * dx + dy * dy > 1600 * 1600) {
-          this.torches.splice(i, 1);
-        }
-      }
-    }
-
-    if (this.mapId === 'amazon_forest') {
-      for (let i = 0; i < this.fruitTrees.length; i++) {
+    for (let i = 0; i < this.fruitTrees.length; i++) {
         const tree = this.fruitTrees[i];
         tree.animTimer += dt * 1.6;
 
@@ -5063,7 +4974,6 @@ export class WorldSystem {
           }
         }
       }
-    }
   }
 
   /**
@@ -5455,37 +5365,7 @@ export class WorldSystem {
 
       this.renderAmazonWater(ctx, camera);
       this.forestCave?.renderPath(ctx, camera);
-      return;
     }
-
-    const image = this.floorImage;
-    if (image) {
-      if (!this.floorPattern) {
-        this.floorPattern = ctx.createPattern(image, 'repeat');
-      }
-
-      if (this.floorPattern) {
-        const tileWidth = image.naturalWidth;
-        const tileHeight = image.naturalHeight;
-        const offsetX = (-camera.x + camera.viewportWidth / 2 + camera.shakeOffsetX) % tileWidth;
-        const offsetY = (-camera.y + camera.viewportHeight / 2 + camera.shakeOffsetY) % tileHeight;
-
-        ctx.save();
-        ctx.translate(offsetX, offsetY);
-        ctx.fillStyle = this.floorPattern;
-        ctx.fillRect(
-          -tileWidth,
-          -tileHeight,
-          camera.viewportWidth + tileWidth * 2,
-          camera.viewportHeight + tileHeight * 2
-        );
-        ctx.restore();
-        return;
-      }
-    }
-
-    ctx.fillStyle = '#1f2b1f';
-    ctx.fillRect(0, 0, camera.viewportWidth, camera.viewportHeight);
   }
 
   /**
@@ -7830,57 +7710,4 @@ export class WorldSystem {
     ctx.restore();
   }
 
-  renderTorches(ctx: CanvasRenderingContext2D, camera: Camera): void {
-    for (let i = 0; i < this.torches.length; i++) {
-      const t = this.torches[i];
-      if (!camera.isInView(t.x, t.y, 40)) continue;
-
-      const screen = camera.worldToScreen(t.x, t.y);
-      const flameWobble = Math.sin(t.animTimer) * 2;
-
-      ctx.save();
-      ctx.translate(screen.x, screen.y);
-
-      // Light glow aura
-      const glow = ctx.createRadialGradient(0, -12, 4, 0, -12, 35);
-      glow.addColorStop(0, 'rgba(249, 115, 22, 0.3)');
-      glow.addColorStop(1, 'rgba(249, 115, 22, 0)');
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(0, -12, 35, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Stone Pedestal
-      ctx.fillStyle = '#334155';
-      ctx.fillRect(-6, 2, 12, 10);
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(-8, -4, 16, 6);
-
-      // Torch post
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(-3, -12, 6, 8);
-
-      // Flickering Flame
-      ctx.fillStyle = '#f97316';
-      ctx.beginPath();
-      ctx.moveTo(-5, -12);
-      ctx.quadraticCurveTo(-6 + flameWobble, -22, 0, -25);
-      ctx.quadraticCurveTo(6 + flameWobble, -22, 5, -12);
-      ctx.fill();
-
-      // Inner yellow flame
-      ctx.fillStyle = '#fde047';
-      ctx.beginPath();
-      ctx.moveTo(-2, -12);
-      ctx.lineTo(0, -19);
-      ctx.lineTo(2, -12);
-      ctx.fill();
-
-      ctx.restore();
-    }
-  }
-
-  clear(): void {
-    this.torches = [];
-  }
 }

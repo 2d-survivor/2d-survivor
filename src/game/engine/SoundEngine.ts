@@ -1,18 +1,6 @@
-import type { MapId } from '../types';
-
-const BGM_TRACK_URL = '/audio/job-23-audio-1.mp3';
 const AMAZON_BGM_TRACK_URL = '/audio/amazon-carajas.mp3';
 
-const PLAYER_HURT_VARIANTS = [
-  { pitch: 185, endPitch: 68, duration: 0.16, filter: 1250, wave: 'triangle' },
-  { pitch: 145, endPitch: 52, duration: 0.20, filter: 850, wave: 'sine' },
-  { pitch: 225, endPitch: 82, duration: 0.14, filter: 1750, wave: 'triangle' },
-  { pitch: 165, endPitch: 60, duration: 0.22, filter: 1050, wave: 'triangle' },
-] as const;
-
 export class SoundEngine {
-  private lastPlayerHurtVariant = -1;
-  private playerHurtNoise: AudioBuffer | null = null;
   private amazonHurtBuffer: AudioBuffer | null = null;
   private thornHurtBuffer: AudioBuffer | null = null;
   private waterWalkingBuffer: AudioBuffer | null = null;
@@ -578,71 +566,16 @@ export class SoundEngine {
     // Weapon impacts are intentionally silent.
   }
 
-  playPlayerHurt(mapId: MapId = 'night_plain'): void {
+  playPlayerHurt(): void {
     if (this.muted || !this.initCtx() || !this.ctx || !this.sfxGain) return;
     if (this.shouldRateLimit('playerHurt', 200)) return;
 
-    if (mapId === 'amazon_forest') {
-      if (!this.amazonHurtBuffer) return;
-      const source = this.ctx.createBufferSource();
-      source.buffer = this.amazonHurtBuffer;
-      source.connect(this.sfxGain);
-      source.onended = () => source.disconnect();
-      source.start();
-      return;
-    }
-
-    // Pick a different impact on each accepted hit, with subtle pitch variation.
-    const count = PLAYER_HURT_VARIANTS.length;
-    let index = Math.floor(Math.random() * (this.lastPlayerHurtVariant < 0 ? count : count - 1));
-    if (this.lastPlayerHurtVariant >= 0 && index >= this.lastPlayerHurtVariant) index++;
-    this.lastPlayerHurtVariant = index;
-    const variant = PLAYER_HURT_VARIANTS[index];
-    const pitchScale = 0.96 + Math.random() * 0.08;
-    const now = this.ctx.currentTime;
-    const end = now + variant.duration;
-
-    // A low falling tone gives the hit weight without the old harsh buzz.
-    const osc = this.ctx.createOscillator();
-    const toneGain = this.ctx.createGain();
-    osc.type = variant.wave;
-    osc.frequency.setValueAtTime(variant.pitch * pitchScale, now);
-    osc.frequency.exponentialRampToValueAtTime(variant.endPitch * pitchScale, end);
-    toneGain.gain.setValueAtTime(0, now);
-    toneGain.gain.linearRampToValueAtTime(0.26, now + 0.004);
-    toneGain.gain.exponentialRampToValueAtTime(0.001, end);
-    osc.connect(toneGain);
-    toneGain.connect(this.sfxGain);
-    osc.onended = () => {
-      osc.disconnect();
-      toneGain.disconnect();
-    };
-    osc.start(now);
-    osc.stop(end);
-
-    // A filtered noise transient adds a distinct physical impact to each timbre.
-    this.playerHurtNoise ??= this.createNoiseBuffer(0.22);
-    if (!this.playerHurtNoise) return;
-    const noise = this.ctx.createBufferSource();
-    const filter = this.ctx.createBiquadFilter();
-    const noiseGain = this.ctx.createGain();
-    noise.buffer = this.playerHurtNoise;
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(variant.filter, now);
-    filter.frequency.exponentialRampToValueAtTime(350, end);
-    noiseGain.gain.setValueAtTime(0, now);
-    noiseGain.gain.linearRampToValueAtTime(0.16, now + 0.003);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, end);
-    noise.connect(filter);
-    filter.connect(noiseGain);
-    noiseGain.connect(this.sfxGain);
-    noise.onended = () => {
-      noise.disconnect();
-      filter.disconnect();
-      noiseGain.disconnect();
-    };
-    noise.start(now);
-    noise.stop(end);
+    if (!this.amazonHurtBuffer) return;
+    const source = this.ctx.createBufferSource();
+    source.buffer = this.amazonHurtBuffer;
+    source.connect(this.sfxGain);
+    source.onended = () => source.disconnect();
+    source.start();
   }
 
   playGemPickup(streak: number = 0): void {
@@ -798,15 +731,15 @@ export class SoundEngine {
     });
   }
 
-  startBgm(mapId: MapId = 'night_plain'): void {
+  startBgm(): void {
     if (this.isBgmPlaying) return;
     if (!this.initCtx() || !this.ctx || !this.bgmGain) return;
     this.isBgmPlaying = true;
 
     // Route the soundtrack through bgmGain so mute and volume controls apply.
     if (!this.bgmAudio) {
-      this.bgmAudio = new Audio(mapId === 'amazon_forest' ? AMAZON_BGM_TRACK_URL : BGM_TRACK_URL);
-      this.bgmAudio.volume = mapId === 'amazon_forest' ? 0.8 : 1;
+      this.bgmAudio = new Audio(AMAZON_BGM_TRACK_URL);
+      this.bgmAudio.volume = 0.8;
       this.bgmAudio.loop = true;
       this.bgmAudio.preload = 'auto';
       const source = this.ctx.createMediaElementSource(this.bgmAudio);

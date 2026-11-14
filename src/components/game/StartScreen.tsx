@@ -7,7 +7,7 @@ import { CharacterConfig, DifficultyId, MapId, SavedGameData } from '@/game/type
 import { CHARACTERS } from '@/game/data/characters';
 import { POWER_UP_DEFINITIONS, getPowerUpCost, saveGameData } from '@/game/data/persistence';
 import { DIFFICULTIES, getDifficulty } from '@/game/data/difficulties';
-import { GAME_MAPS } from '@/game/data/maps';
+import { DEFAULT_MAP_ID, GAME_MAPS } from '@/game/data/maps';
 import { countClaimableMissions, getAccountLevel } from '@/game/data/missions';
 import { WEAPON_REGISTRY } from '@/game/data/upgrades';
 import { EquipmentModal } from './EquipmentModal';
@@ -34,7 +34,6 @@ import {
   Target,
   Volume2,
   Map as MapIcon,
-  Moon,
   TreePine,
 } from 'lucide-react';
 
@@ -89,7 +88,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyId>(
     savedData.difficulty ?? 'normal'
   );
-  const [selectedMap, setSelectedMap] = useState<MapId>('night_plain');
+  const [selectedMap, setSelectedMap] = useState<MapId>(DEFAULT_MAP_ID);
   const [isEquipmentOpen, setIsEquipmentOpen] = useState(false);
   const [isAmazonGuideOpen, setIsAmazonGuideOpen] = useState(false);
   const [selectionVolume, setSelectionVolume] = useState(1);
@@ -299,11 +298,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
                           {map.description}
                         </span>
                       </span>
-                      {map.id === 'amazon_forest' ? (
-                        <TreePine className="h-4 w-4 shrink-0 text-emerald-400" />
-                      ) : (
-                        <Moon className="h-4 w-4 shrink-0 text-sky-400" />
-                      )}
+                      <TreePine className="h-4 w-4 shrink-0 text-emerald-400" />
                     </button>
                   );
                 })}

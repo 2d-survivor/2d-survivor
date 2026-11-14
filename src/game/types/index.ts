@@ -162,7 +162,7 @@ export interface PermanentPowerUp {
 
 export type DifficultyId = 'easy' | 'normal' | 'hard' | 'nightmare' | 'infernal';
 
-export type MapId = 'night_plain' | 'amazon_forest';
+export type MapId = 'amazon_forest';
 
 export interface DifficultyConfig {
   id: DifficultyId;

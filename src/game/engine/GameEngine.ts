@@ -550,10 +550,10 @@ export class GameEngine {
     this.worldProps = new WorldSystem(mapId);
     const camp = this.worldProps.getHunterCampPosition();
     this.hunterQuest = getHunterQuest(savedData.inventories?.[character.id] ?? emptyInventory());
-    this.tribeHunter = mapId === 'amazon_forest' ? new TribeHunter(camp.x, camp.y, this.hunterQuest.completed) : null;
-    this.gorillaNpc = mapId === 'amazon_forest' ? new GorillaNpc() : null;
-    this.anacondaNpc = mapId === 'amazon_forest' ? new AnacondaNpc() : null;
-    this.kopenawaNpc = mapId === 'amazon_forest' ? new KopenawaNpc() : null;
+    this.tribeHunter = new TribeHunter(camp.x, camp.y, this.hunterQuest.completed);
+    this.gorillaNpc = new GorillaNpc();
+    this.anacondaNpc = new AnacondaNpc();
+    this.kopenawaNpc = new KopenawaNpc();
     const inventory = savedData.inventories?.[character.id] ?? emptyInventory();
     this.caveRewardClaimed = inventory.items.some(item => item.id === GUARDIAN_BOW.id);
     // Kopenawa respawns like the Gorilla and the Giant Anaconda: the save only
@@ -581,12 +581,8 @@ export class GameEngine {
       return this.clampToGorillaArena(resolved.x, resolved.y, radius);
     });
     this.weaponSystem = new WeaponSystem(
-      mapId === 'amazon_forest'
-        ? (AMAZON_STARTING_WEAPON_BY_CHARACTER[character.id] ?? 'garras_onca')
-        : character.startingWeapon,
-      mapId === 'amazon_forest'
-        ? { maxWeaponSlots: 4, maxPassiveSlots: 4, maxItemLevel: 10 }
-        : undefined
+      AMAZON_STARTING_WEAPON_BY_CHARACTER[character.id] ?? 'garras_onca',
+      { maxWeaponSlots: 4, maxPassiveSlots: 4, maxItemLevel: 10 }
     );
     this.weaponSystem.recalculatePlayerStats(this.player);
     this.player.hp = this.player.maxHp;
@@ -617,10 +613,8 @@ export class GameEngine {
     if (this.isRunning) return;
     this.isRunning = true;
     this.lastTime = performance.now();
-    this.sound.startBgm(this.waveDirector.isAmazonForest ? 'amazon_forest' : 'night_plain');
-    if (this.waveDirector.isAmazonForest) {
-      this.sound.startAmazonAmbient();
-    }
+    this.sound.startBgm();
+    this.sound.startAmazonAmbient();
     this.loop(this.lastTime);
   }
 
@@ -751,7 +745,7 @@ export class GameEngine {
       if (interactRequested && this.caveInterior.nearExit(this.player)) {
         this.insideCave = false;
         this.sound.stopCaveAmbience();
-        this.sound.startBgm('amazon_forest');
+        this.sound.startBgm();
         this.sound.startAmazonAmbient();
         this.player.x = -1950;
         this.player.y = 1980;
@@ -899,8 +893,7 @@ export class GameEngine {
         !e.isElite &&
         !e.isWaterDweller &&
         !e.isRiverPredator &&
-        e.type !== 'bat' &&
-        e.type !== 'ghost';
+        e.type !== 'bat';
       if (e.type === 'sucuri') {
         e.terrainSpeedMultiplier = enemyInWater
           ? SUCURI_WATER_SPEED_MULTIPLIER
@@ -1664,8 +1657,8 @@ export class GameEngine {
       return;
     }
 
-    // 5. Update World Props (Torches and fruit trees)
-    this.worldProps.update(dt, this.player, (drop) => this.drops.push(drop));
+    // 5. Update World Props (fruit trees and field plants)
+    this.worldProps.update(dt);
 
     // 5.1. Fruit trees and herbs are harvested only when the player presses E nearby.
     if (interactRequested) {
@@ -1923,8 +1916,7 @@ export class GameEngine {
         enemy.isAquatic ||
         enemy.isBoss ||
         enemy.isElite ||
-        enemy.type === 'bat' ||
-        enemy.type === 'ghost'
+        enemy.type === 'bat'
       ) {
         continue;
       }
@@ -2426,7 +2418,7 @@ export class GameEngine {
       if (hurtSound === 'thorns') {
         this.sound.playThornHurt();
       } else {
-        this.sound.playPlayerHurt(this.waveDirector.isAmazonForest ? 'amazon_forest' : 'night_plain');
+        this.sound.playPlayerHurt();
       }
       if (shake) this.camera.shake(0.2, 5);
       this.vfx.addDamageNumber(this.player.x, this.player.y, damageTaken, critical, false);
@@ -2575,19 +2567,14 @@ export class GameEngine {
       }
       // Kopenawa leaves no physical loot outside the cave; his bow waits inside.
       if (enemy instanceof KopenawaBoss) {
-        if (!this.waveDirector.isEndless && !this.waveDirector.isAmazonForest) this.handleVictory();
-        else this.persistRunStats(false);
+        this.persistRunStats(false);
         return;
       }
       const bossXp = Math.round(250 * this.difficulty.xpMultiplier);
       this.drops.push(new Drop(Date.now() + Math.random(), 'chest', enemy.x, enemy.y));
       this.player.xp += bossXp * 2 * this.player.xpMultiplier;
 
-      if (!this.waveDirector.isEndless && !this.waveDirector.isAmazonForest) {
-        this.handleVictory();
-      } else {
-        this.persistRunStats(false);
-      }
+      this.persistRunStats(false);
       return;
     }
 
@@ -2999,7 +2986,7 @@ export class GameEngine {
     this.callbacks.onHUDUpdate({
       hunterQuest: this.tribeHunter ? { ...this.hunterQuest } : undefined,
       hunterCanInteract: this.canTalkToHunter(),
-      mapId: this.waveDirector.isAmazonForest ? 'amazon_forest' : 'night_plain',
+      mapId: 'amazon_forest',
       playerHp: Math.round(this.player.hp),
       playerMaxHp: Math.round(this.player.maxHp),
       stamina: Math.round(this.player.stamina),
@@ -3014,7 +3001,7 @@ export class GameEngine {
       passives: passivesList,
       activeBoss,
       eventAlert: this.waveDirector.eventAlert || undefined,
-      objectives: this.waveDirector.isAmazonForest ? this.buildObjectivesHUD() : undefined,
+      objectives: this.buildObjectivesHUD(),
     });
   }
 
@@ -3042,10 +3029,7 @@ export class GameEngine {
     this.worldProps.renderThornBushes(ctx, camera);
     this.worldProps.renderHerbs(ctx, camera, this.player);
 
-    // 2. Render Torches & Props
-    this.worldProps.renderTorches(ctx, camera);
-
-    // 2.5. Water rings and white splashes under anyone wading in the river.
+    // 2. Water rings and white splashes under anyone wading in the river.
     this.renderWaterRipples();
 
     // 3. Render Drops (Gems, Pickups, Chests)
@@ -4314,9 +4298,9 @@ export class GameEngine {
 
   public devSpawnEnemy(type: EnemyType, count: number = 1): void {
     if (this.bossEncounter || type === 'boss_gorilla' || type === 'boss_anaconda') return;
-    // The Minotaur is night-plain content and must never appear in the forest,
-    // even when spawned manually through the developer tools.
-    if (type === 'elite_minotaur' && this.waveDirector.isAmazonForest) return;
+    // Removed-map exclusives must never appear in the forest, even when
+    // spawned manually through the developer tools.
+    if (type === 'elite_minotaur' || type === 'boss_vampire') return;
 
     const minutes = this.waveDirector.survivalTime / 60;
     const hpMult = (1.0 + minutes * 0.52) * this.difficulty.enemyHp;

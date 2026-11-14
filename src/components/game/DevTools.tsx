@@ -1052,7 +1052,7 @@ export const DevTools: React.FC<DevToolsProps> = React.memo(function DevToolsPan
                           onClick={() => {
                             const engine = getEngine();
                             if (!engine) return;
-                            engine.devSpawnEnemy('boss_vampire');
+                            engine.devSpawnEnemy('boss_boitata');
                             setTelemetry(engine.getDevTelemetry());
                           }}
                           className="p-1.5 rounded-lg bg-rose-950/70 hover:bg-rose-900 border border-rose-800 text-rose-300 font-semibold text-[11px] transition cursor-pointer"
@@ -1144,54 +1144,6 @@ export const DevTools: React.FC<DevToolsProps> = React.memo(function DevToolsPan
                           className="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-semibold text-[11px] transition cursor-pointer text-left"
                         >
                           🦇 Morcego
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const engine = getEngine();
-                            if (!engine) return;
-                            engine.devSpawnEnemy('skeleton', spawnMultiplier);
-                            setTelemetry(engine.getDevTelemetry());
-                          }}
-                          className="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-semibold text-[11px] transition cursor-pointer text-left"
-                        >
-                          💀 Esqueleto
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const engine = getEngine();
-                            if (!engine) return;
-                            engine.devSpawnEnemy('zombie', spawnMultiplier);
-                            setTelemetry(engine.getDevTelemetry());
-                          }}
-                          className="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-semibold text-[11px] transition cursor-pointer text-left"
-                        >
-                          🧟 Zumbi
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const engine = getEngine();
-                            if (!engine) return;
-                            engine.devSpawnEnemy('ghost', spawnMultiplier);
-                            setTelemetry(engine.getDevTelemetry());
-                          }}
-                          className="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-semibold text-[11px] transition cursor-pointer text-left"
-                        >
-                          👻 Fantasma
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const engine = getEngine();
-                            if (!engine) return;
-                            engine.devSpawnEnemy('elite_minotaur', Math.min(5, spawnMultiplier));
-                            setTelemetry(engine.getDevTelemetry());
-                          }}
-                          className="p-2 rounded-lg bg-purple-950/50 hover:bg-purple-900/60 border border-purple-800 text-purple-300 font-semibold text-[11px] transition cursor-pointer text-left"
-                        >
-                          ⚔️ Minotauro Elite
                         </button>
                       </div>
 

@@ -158,8 +158,7 @@ export const HUD: React.FC<HUDProps> = ({
             )}
 
             {/* Amazon Forest restricted inventory: 4 attack + 4 buff squares */}
-            {hud.mapId === 'amazon_forest' && (
-              <div className="w-56 max-w-full rounded-lg border border-slate-700/80 bg-slate-950/85 px-2 py-1.5 shadow-lg backdrop-blur-sm">
+            <div className="w-56 max-w-full rounded-lg border border-slate-700/80 bg-slate-950/85 px-2 py-1.5 shadow-lg backdrop-blur-sm">
                 <div className="mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-widest">
                   <span className="text-amber-300">Ataques</span>
                   <span className="text-slate-500">{Math.min(4, hud.weapons.length)}/4</span>
@@ -215,7 +214,6 @@ export const HUD: React.FC<HUDProps> = ({
                   })}
                 </div>
               </div>
-            )}
 
             {/* HP Bar */}
             <div className="flex items-center gap-2 bg-slate-900/80 border border-slate-700/80 rounded-lg px-2.5 py-1 backdrop-blur-sm shadow">
@@ -249,37 +247,6 @@ export const HUD: React.FC<HUDProps> = ({
               </span>
             </div>
 
-            {/* Weapons & Passives Slots (night plain keeps the free inventory) */}
-            {hud.mapId !== 'amazon_forest' && (
-            <div className="flex flex-wrap gap-1">
-              {hud.weapons.map((w) => (
-                <div
-                  key={w.id}
-                  className={`relative p-1 rounded-md border flex items-center justify-center bg-slate-900/85 backdrop-blur-sm ${
-                    w.evolved ? 'border-amber-400 shadow-amber-500/30 shadow' : 'border-slate-700'
-                  }`}
-                  title={`${w.name} (Lv. ${w.level})`}
-                >
-                  {renderWeaponIcon(w.id, 'w-4 h-4')}
-                  <span className="absolute -bottom-1 -right-1 text-[9px] font-black bg-slate-950 px-1 rounded border border-slate-700 text-yellow-300">
-                    {w.evolved ? '★' : w.level}
-                  </span>
-                </div>
-              ))}
-              {hud.passives.map((p) => (
-                <div
-                  key={p.id}
-                  className="relative p-1 rounded-md border border-slate-700 bg-slate-900/85 backdrop-blur-sm flex items-center justify-center"
-                  title={`${p.name} (Lv. ${p.level})`}
-                >
-                  {renderPassiveIcon(p.id, 'w-4 h-4')}
-                  <span className="absolute -bottom-1 -right-1 text-[9px] font-black bg-slate-950 px-1 rounded border border-slate-700 text-emerald-300">
-                    {p.level}
-                  </span>
-                </div>
-              ))}
-            </div>
-            )}
           </div>
 
           {/* Right: Kills, Gold, and Controls */}
