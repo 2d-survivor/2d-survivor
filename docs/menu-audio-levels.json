@@ -1,0 +1,42 @@
+{
+  "targetLufs": -21.825869332208807,
+  "method": "BS.1770 K-weighting, 400ms/75% overlap gating, 48kHz stereo playback; sample peak (not true peak)",
+  "tracks": [
+    {
+      "id": "kayrurururu",
+      "url": "/audio/job-57-audio-1.mp3",
+      "duration": 130.74285416666666,
+      "sourceChannels": 2,
+      "lufs": -21.825869332208807,
+      "peak": 0.5145735740661621,
+      "samplePeakDbFS": -5.771050415056442,
+      "gain": 1,
+      "outputLufs": -21.825869332208807,
+      "outputSamplePeakDbFS": -5.771050415056442
+    },
+    {
+      "id": "derson",
+      "url": "/audio/job-54-audio-1.mp3",
+      "duration": 212.19264583333333,
+      "sourceChannels": 2,
+      "lufs": -10.201991215944046,
+      "peak": 1.1260541677474976,
+      "samplePeakDbFS": 1.031185646683253,
+      "gain": 0.262305,
+      "outputLufs": -21.825859834048273,
+      "outputSamplePeakDbFS": -10.592682971420974
+    },
+    {
+      "id": "lula",
+      "url": "/audio/job-63-audio-1.mp3",
+      "duration": 192.65304166666667,
+      "sourceChannels": 2,
+      "lufs": -7.755372110694844,
+      "peak": 1.1337006092071533,
+      "samplePeakDbFS": 1.0899676001981935,
+      "gain": 0.197913,
+      "outputLufs": -21.825885671454603,
+      "outputSamplePeakDbFS": -12.980545960561566
+    }
+  ]
+}

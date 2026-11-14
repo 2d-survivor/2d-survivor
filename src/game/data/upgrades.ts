@@ -340,15 +340,15 @@ export const WEAPON_REGISTRY: Record<WeaponId, WeaponMeta> = {
   chicotada_cipo: {
     id: 'chicotada_cipo',
     name: 'Chicotada de Cipó',
-    description: 'Cipós vivos estalam em arco, empurrando e enredando os inimigos.',
+    description: 'Cipó de longo alcance que alterna três varreduras circulares de 360° ao redor do personagem. A ponta causa +50% de dano; aplica empurrão e lentidão leve.',
     maxLevel: 10,
     iconName: 'FlameKindling',
     synergyPassive: 'vigor_anta',
     evolvedId: 'chicotada_cipo',
     evolvedName: 'Chicotada de Cipó',
-    evolvedDescription: 'Cipós vivos estalam em arco, empurrando e enredando os inimigos.',
+    evolvedDescription: 'Cipó de longo alcance que alterna três varreduras circulares de 360° ao redor do personagem. A ponta causa +50% de dano; aplica empurrão e lentidão leve.',
     levelDescriptions: levels10((lv) =>
-      `Nv.${lv}: chicotada em arco com ${18 + lv * 4} de dano e lentidão.`
+      `Nv.${lv}: ${22 + lv * 6} de dano, ${220 + lv * 14} px de alcance e +50% de dano na ponta. Aplica 15% de lentidão por 0,8 s.`
     ),
   },
   enxame_mutuca: {

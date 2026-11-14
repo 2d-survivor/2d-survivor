@@ -1579,7 +1579,7 @@ export class GameEngine {
         for (let bee = 0; bee < count; bee++) {
           const angle = aim + (bee - (count - 1) / 2) * 0.16;
           this.bossProjectiles.push({
-            x: e.x, y: e.y, vx: Math.cos(angle) * 240, vy: Math.sin(angle) * 240,
+            x: e.x, y: e.y, vx: Math.cos(angle) * 312, vy: Math.sin(angle) * 312,
             radius: 9, damage: Math.max(1, Math.round(e.damage * 0.6)),
             life: 4, maxLife: 4, kind: 'bee',
           });
@@ -2859,7 +2859,9 @@ export class GameEngine {
     this.resume();
   }
 
-  private handlePlayerDeath(): void {    if (this.bossEncounter?.kind === 'anaconda') this.restoreBossEncounter();
+  private handlePlayerDeath(): void {
+    this.weaponSystem.clearVineLashes();
+    if (this.bossEncounter?.kind === 'anaconda') this.restoreBossEncounter();
     this.isGameOver = true;
     this.sound.setWaterWalking(false);
     this.sound.playGameOver();
@@ -2873,6 +2875,7 @@ export class GameEngine {
   }
 
   private handleVictory(): void {
+    this.weaponSystem.clearVineLashes();
     this.hasWon = true;
     this.pause();
     this.sound.playVictory();
@@ -4534,6 +4537,7 @@ export class GameEngine {
   }
 
   public destroy(): void {
+    this.weaponSystem.clearVineLashes();
     this.isRunning = false;
     if (this.animFrameId !== null) {
       cancelAnimationFrame(this.animFrameId);

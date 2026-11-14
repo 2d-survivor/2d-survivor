@@ -1,6 +1,7 @@
 import { WeaponId, PassiveId, UpgradeOption, WeaponInstance, PassiveInstance } from '../types';
 import { WEAPON_REGISTRY, PASSIVE_REGISTRY, LULA_SKILL, FUSION_RECIPES } from '../data/upgrades';
 import { Player } from '../entities/Player';
+import { VineLashAttack, VINE_TIMING, vinePoints, vineHitMultiplier } from './VineLash';
 import { Enemy } from '../entities/Enemy';
 import { SpatialGrid } from '../engine/SpatialGrid';
 import { Camera } from '../engine/Camera';
@@ -240,6 +241,10 @@ export class WeaponSystem {
 
   public projectiles: Projectile[] = [];
   public slashEffects: SlashEffect[] = [];
+  private vineLashes: VineLashAttack[] = [];
+  private vineVariantIndex = 0;
+
+  public clearVineLashes(): void { this.vineLashes = []; }
   public lightningStrikes: LightningStrikeEffect[] = [];
   public chainArcs: ChainArcEffect[] = [];
   public ringPulses: RingPulseEffect[] = [];
@@ -359,6 +364,7 @@ export class WeaponSystem {
 
     const prevMaxHp = player.maxHp;
     this.weapons.delete(weaponId);
+    this.vineLashes = this.vineLashes.filter(attack => attack.weapon.id !== weaponId);
     this.passives.delete(passiveId);
     this.projectiles = this.projectiles.filter((p) => p.weaponId !== weaponId);
     this.groundZones = this.groundZones.filter((z) => z.weaponId !== weaponId);
@@ -397,6 +403,7 @@ export class WeaponSystem {
 
   devRemoveWeapon(id: WeaponId): void {
     this.weapons.delete(id);
+    this.vineLashes = this.vineLashes.filter(attack => attack.weapon.id !== id);
     this.projectiles = this.projectiles.filter((p) => p.weaponId !== id);
     this.groundZones = this.groundZones.filter((z) => z.weaponId !== id);
   }
@@ -606,6 +613,8 @@ export class WeaponSystem {
 
     // 3. Process enemy DoTs (Poison & Bleed)
     this.updateEnemyDoTs(dt, player, targetableEnemies, spatialGrid, vfx, onEnemyKilled);
+
+    this.updateVineLashes(dt, player, targetableEnemies, spatialGrid, vfx, sound, onEnemyKilled);
 
     // 4. Update weapon cooldowns & trigger active firing
     this.weapons.forEach((weapon) => {
@@ -885,7 +894,7 @@ export class WeaponSystem {
       }
       case 'chicotada_cipo': {
         w.cooldownTimer = Math.max(0.74, 1.15 - w.level * 0.035) * cdFactor;
-        this.triggerVineLash(w, player, grid, vfx, sound, onEnemyKilled);
+        this.triggerVineLash(w, player, grid);
         break;
       }
       case 'enxame_mutuca': {
@@ -1908,62 +1917,79 @@ export class WeaponSystem {
     }
   }
 
-  private triggerVineLash(
-    w: WeaponInstance,
-    player: Player,
-    grid: SpatialGrid<Enemy>,
-    vfx: VFXManager,
-    sound: SoundEngine,
-    onEnemyKilled: (enemy: Enemy) => void
+  private triggerVineLash(w: WeaponInstance, player: Player, grid: SpatialGrid<Enemy>): void {
+    const reach = (220 + 14 * w.level) * player.areaMultiplier;
+    const targets = grid.queryRadius(player.x, player.y, reach)
+      .filter(enemy => enemy.hp > 0 && !enemy.isSubmerged)
+      .sort((a, b) => (a.x - player.x) ** 2 + (a.y - player.y) ** 2 -
+        ((b.x - player.x) ** 2 + (b.y - player.y) ** 2));
+    const target = targets[0];
+    const dx = target ? target.x - player.x : player.facingX;
+    const dy = target ? target.y - player.y : player.facingY;
+    const angle = Math.hypot(dx, dy) > 0.001 ? Math.atan2(dy, dx) : Math.atan2(player.facingY, player.facingX);
+    this.vineLashes.push({
+      weapon: w, x: player.x, y: player.y, angle, elapsed: 0, reach,
+      variant: (['clockwise', 'counterclockwise', 'wave'] as const)[this.vineVariantIndex++ % 3],
+      area: player.areaMultiplier, damage: (22 + 6 * w.level) * player.might,
+      slowDuration: 0.8 * player.durationMultiplier, hitEnemyIds: new Set(),
+    });
+  }
+
+  private updateVineLashes(
+    dt: number, player: Player, enemies: Enemy[], grid: SpatialGrid<Enemy>,
+    vfx: VFXManager, sound: SoundEngine, onEnemyKilled: (enemy: Enemy) => void
   ): void {
-    const facing = player.facingX < 0 ? -1 : 1;
-    const slashWidth = (130 + w.level * 10) * player.areaMultiplier;
-    const slashHeight = (58 + w.level * 4) * player.areaMultiplier;
-    const baseDamage = (18 + w.level * 4) * player.might;
-
-    this.slashEffects.push({
-      x: player.x + (slashWidth / 2) * facing,
-      y: player.y,
-      width: slashWidth,
-      height: slashHeight,
-      life: 0.2,
-      maxLife: 0.2,
-      isEvolved: false,
-      direction: facing,
-      color: '#22c55e',
-    });
-    this.slashEffects.push({
-      x: player.x,
-      y: player.y,
-      width: slashWidth * 0.9,
-      height: slashHeight * 0.75,
-      life: 0.16,
-      maxLife: 0.16,
-      isEvolved: false,
-      direction: -facing,
-      color: '#84cc16',
-    });
-
-    const targets = grid.queryRadius(player.x, player.y, slashWidth * 0.75);
-    for (let i = 0; i < targets.length; i++) {
-      const enemy = targets[i];
-      if (enemy.hp <= 0 || Math.abs(enemy.y - player.y) > slashHeight * 0.8 + enemy.radius) continue;
-      const result = this.dealHitToEnemy(
-        w,
-        enemy,
-        baseDamage,
-        player,
-        facing,
-        0,
-        190,
-        grid,
-        vfx,
-        onEnemyKilled
-      );
-      enemy.applySlow(0.3, 1.6 * player.durationMultiplier);
-      if (result.dead) continue;
+    for (let i = this.vineLashes.length - 1; i >= 0; i--) {
+      const attack = this.vineLashes[i];
+      if (this.weapons.get(attack.weapon.id) !== attack.weapon) {
+        this.vineLashes.splice(i, 1);
+        continue;
+      }
+      const before = attack.elapsed;
+      const after = Math.min(VINE_TIMING.end, before + Math.max(0, dt));
+      const start = Math.max(before, VINE_TIMING.preparation);
+      const end = Math.min(after, VINE_TIMING.snap);
+      const movement = Math.hypot(player.x - attack.x, player.y - attack.y);
+      const origin = (time: number) => {
+        const t = dt > 0 ? (time - before) / dt : 1;
+        return { x: attack.x + (player.x - attack.x) * t, y: attack.y + (player.y - attack.y) * t };
+      };
+      if (end > start) {
+        const steps = Math.max(1, Math.ceil((end - start) / (1 / 120)), Math.ceil(movement / 6));
+        const candidates = enemies.filter(enemy => enemy.hp > 0 && !enemy.isSubmerged &&
+          !attack.hitEnemyIds.has(enemy.id) &&
+          Math.hypot(enemy.x - attack.x, enemy.y - attack.y) <= attack.reach + 12 * attack.area + enemy.radius + movement);
+        const multipliers = new Map<Enemy, number>();
+        let position = origin(start);
+        let previous = vinePoints(attack, start, position.x, position.y);
+        for (let step = 1; step <= steps; step++) {
+          const time = start + (end - start) * step / steps;
+          position = origin(time);
+          const current = vinePoints(attack, time, position.x, position.y);
+          for (const enemy of candidates) {
+            if (multipliers.get(enemy) === 1.5) continue;
+            const hit = vineHitMultiplier(previous, current, enemy, enemy.radius + 12 * attack.area, attack.reach);
+            if (hit > 0) multipliers.set(enemy, Math.max(hit, multipliers.get(enemy) ?? 0));
+          }
+          previous = current;
+        }
+        for (const [enemy, multiplier] of multipliers) {
+          if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+          attack.hitEnemyIds.add(enemy.id);
+          this.dealHitToEnemy(attack.weapon, enemy, attack.damage * multiplier, player,
+            Math.cos(attack.angle), Math.sin(attack.angle), 110, grid, vfx, onEnemyKilled);
+          if (enemy.hp > 0) enemy.applySlow(0.15, attack.slowDuration);
+          vfx.addSparks(enemy.x, enemy.y, multiplier > 1 ? '#d9f99d' : '#4ade80', 3);
+        }
+      }
+      attack.elapsed = after;
+      attack.x = player.x;
+      attack.y = player.y;
+      if (before < VINE_TIMING.snap && after >= VINE_TIMING.snap) {
+        if (attack.weapon.id === player.character.startingWeapon) sound.playSlash();
+      }
+      if (after >= VINE_TIMING.end) this.vineLashes.splice(i, 1);
     }
-    if (w.id === player.character.startingWeapon) sound.playSlash();
   }
 
   private triggerMutucaSwarm(
@@ -2984,7 +3010,98 @@ export class WeaponSystem {
     }
   }
 
+  private renderVineLashes(ctx: CanvasRenderingContext2D, camera: Camera): void {
+    for (const attack of this.vineLashes) {
+      if (!camera.isInView(attack.x, attack.y, attack.reach + 30)) continue;
+      const points = vinePoints(attack, attack.elapsed).map(point => camera.worldToScreen(point.x, point.y));
+      const fade = attack.elapsed > VINE_TIMING.retract ?
+        Math.max(0, (VINE_TIMING.end - attack.elapsed) / 0.12) : 1;
+      ctx.save();
+      ctx.globalAlpha = fade * 0.55;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      if (attack.elapsed >= VINE_TIMING.preparation && attack.elapsed < VINE_TIMING.retract) {
+        const trail = vinePoints(attack, Math.max(VINE_TIMING.preparation, attack.elapsed - 0.018));
+        ctx.strokeStyle = 'rgba(105,130,62,0.12)';
+        ctx.lineWidth = 4 * attack.area;
+        ctx.beginPath();
+        trail.forEach((point, index) => {
+          const screen = camera.worldToScreen(point.x, point.y);
+          if (index === 0) ctx.moveTo(screen.x, screen.y); else ctx.lineTo(screen.x, screen.y);
+        });
+        ctx.stroke();
+      }
+      // Separate outline and core passes prevent seams between tapered segments.
+      for (const outline of [true, false]) {
+        for (let segment = 0; segment < points.length - 1; segment++) {
+          const t = segment / (points.length - 2);
+          const a = points[segment], b = points[segment + 1];
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+          ctx.strokeStyle = outline ? '#273d20' : '#718343';
+          ctx.lineWidth = (6 - t * 4.5 - (outline ? 0 : 0.8)) * attack.area;
+          ctx.stroke();
+        }
+      }
+      for (let segment = 0; segment < points.length - 1; segment++) {
+        const a = points[segment], b = points[segment + 1];
+        const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy);
+        if (length < 0.01) continue;
+        const t = segment / (points.length - 2);
+        const width = (6 - t * 4.5) * attack.area;
+        const nx = -dy / length, ny = dx / length;
+        // A narrow, off-centre highlight gives the rope natural volume.
+        ctx.strokeStyle = 'rgba(183,195,119,0.65)';
+        ctx.lineWidth = 0.65 * attack.area;
+        ctx.beginPath(); ctx.moveTo(a.x - nx * width * 0.18, a.y - ny * width * 0.18);
+        ctx.lineTo(b.x - nx * width * 0.18, b.y - ny * width * 0.18); ctx.stroke();
+        if (segment % 2 === 0 && length > 2 * attack.area) {
+          ctx.save(); ctx.translate((a.x + b.x) / 2, (a.y + b.y) / 2); ctx.rotate(Math.atan2(dy, dx));
+          ctx.strokeStyle = 'rgba(45,62,26,0.45)'; ctx.lineWidth = 0.55 * attack.area;
+          ctx.beginPath(); ctx.moveTo(-attack.area, -width * 0.3); ctx.lineTo(attack.area, width * 0.3); ctx.stroke();
+          ctx.restore();
+        }
+      }
+      // Exactly three modest leaves; keep the final third clean and tapered.
+      for (const [index, fraction] of [0.25, 0.45, 0.65].entries()) {
+        const position = fraction * (points.length - 1);
+        const segment = Math.floor(position), mix = position - segment;
+        const a = points[segment], b = points[segment + 1];
+        const x = a.x + (b.x - a.x) * mix, y = a.y + (b.y - a.y) * mix;
+        const side = index % 2 === 0 ? -1 : 1;
+        const scale = attack.area * Math.min(1, Math.hypot(points.at(-1)!.x - points[0].x, points.at(-1)!.y - points[0].y) / (70 * attack.area));
+        ctx.save(); ctx.translate(x, y); ctx.rotate(Math.atan2(b.y - a.y, b.x - a.x));
+        ctx.fillStyle = '#617d3c'; ctx.strokeStyle = '#344c27'; ctx.lineWidth = 0.6 * scale;
+        ctx.beginPath(); ctx.ellipse(1.5 * scale, side * 3 * scale, 4.5 * scale, 1.8 * scale, side * 0.65, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke(); ctx.restore();
+      }
+      if (attack.elapsed >= VINE_TIMING.snap && attack.elapsed < VINE_TIMING.retract) {
+        const tip = points[points.length - 1], previous = points[points.length - 2];
+        const progress = (attack.elapsed - VINE_TIMING.snap) / 0.05;
+        ctx.save(); ctx.translate(tip.x, tip.y); ctx.rotate(Math.atan2(tip.y - previous.y, tip.x - previous.x));
+        ctx.globalAlpha = fade * 0.55 * (1 - progress);
+        ctx.strokeStyle = '#9eaa75'; ctx.lineWidth = attack.area;
+        ctx.beginPath();
+        for (const side of [-1, 1]) {
+          ctx.moveTo(3 * attack.area, side * 4 * attack.area);
+          ctx.lineTo((8 + progress * 5) * attack.area, side * 6 * attack.area);
+        }
+        ctx.stroke();
+        ctx.fillStyle = '#6b8041';
+        for (let fragment = 0; fragment < 4; fragment++) {
+          const angle = -1.1 + fragment * 0.7;
+          const distance = (4 + progress * 17) * attack.area;
+          ctx.save(); ctx.translate(Math.cos(angle) * distance, Math.sin(angle) * distance);
+          ctx.rotate(angle + progress); ctx.fillRect(-attack.area, -0.6 * attack.area, 2 * attack.area, 1.2 * attack.area); ctx.restore();
+        }
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+  }
+
   render(ctx: CanvasRenderingContext2D, camera: Camera, player: Player): void {
+    this.renderVineLashes(ctx, camera);
+
     // 3. Render Slash Effects
     for (let i = 0; i < this.slashEffects.length; i++) {
       const s = this.slashEffects[i];

@@ -19,6 +19,7 @@ import { GorillaDialogue } from './GorillaDialogue';
 import { AnacondaDialogue } from './AnacondaDialogue';
 import { EquipmentRewardModal } from './EquipmentRewardModal';
 import { HunterDialogue } from './HunterDialogue';
+import { useAudioSettings, updateAudioSettings } from './useAudioSettings';
 
 type GameState = 'menu' | 'playing' | 'paused' | 'level_up' | 'chest' | 'game_over' | 'victory' | 'dialogue' | 'anaconda_dialogue' | 'equipment_reward' | 'hunter_dialogue';
 
@@ -53,14 +54,19 @@ export const GameContainer: React.FC = () => {
   const [chestReward, setChestReward] = useState<{ gold: number; upgrade?: UpgradeOption } | null>(null);
   const [endSummary, setEndSummary] = useState<GameEndSummary | null>(null);
 
-  const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [sfxVolume, setSfxVolume] = useState<number>(0.5);
-  const [bgmVolume, setBgmVolume] = useState<number>(0.3);
+  const { isMuted, sfxVolume, bgmVolume } = useAudioSettings();
 
   const engineRef = useRef<GameEngine | null>(null);
   const getEngine = useCallback(() => engineRef.current, []);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const gameStateRef = useRef<GameState>('menu');
+
+  useEffect(() => {
+    const sound = engineRef.current?.sound;
+    sound?.setMuted(isMuted);
+    sound?.setSfxVolume(sfxVolume);
+    sound?.setBgmVolume(bgmVolume);
+  }, [isMuted, sfxVolume, bgmVolume]);
 
   useEffect(() => {
     gameStateRef.current = gameState;
@@ -231,21 +237,21 @@ export const GameContainer: React.FC = () => {
 
   const handleToggleMute = () => {
     const next = !isMuted;
-    setIsMuted(next);
+    updateAudioSettings({ isMuted: next });
     if (engineRef.current) {
       engineRef.current.sound.setMuted(next);
     }
   };
 
   const handleSfxVolumeChange = (vol: number) => {
-    setSfxVolume(vol);
+    updateAudioSettings({ sfxVolume: vol });
     if (engineRef.current) {
       engineRef.current.sound.setSfxVolume(vol);
     }
   };
 
   const handleBgmVolumeChange = (vol: number) => {
-    setBgmVolume(vol);
+    updateAudioSettings({ bgmVolume: vol });
     if (engineRef.current) {
       engineRef.current.sound.setBgmVolume(vol);
     }

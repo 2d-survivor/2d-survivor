@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useAudioSettings, updateAudioSettings } from './useAudioSettings';
 import Image from 'next/image';
 import { CharacterAtlasPortrait } from './CharacterAtlasPortrait';
 import { CharacterConfig, DifficultyId, MapId, SavedGameData } from '@/game/types';
@@ -71,10 +72,13 @@ const CHARACTER_SELECTION_MUSIC: Record<string, string> = {
   lula: '/audio/job-63-audio-1.mp3',
 };
 
-// Per-character music volume multiplier, applied on top of the selection volume slider.
+// Offline BS.1770 loudness matching to Kayru (-21.826 LUFS at slider 100%).
+// Apply before the saved user volume; originals remain untouched.
+// Measurements and reproduction: docs/menu-audio-levels.json, scripts/analyze-menu-audio.mjs.
 const CHARACTER_SELECTION_MUSIC_VOLUME: Record<string, number> = {
-  derson: 0.5,
-  lula: 0.5,
+  kayrurururu: 1,
+  derson: 0.262305,
+  lula: 0.197913,
 };
 
 const getSelectionMusicVolume = (characterId: string, masterVolume: number) =>
@@ -91,11 +95,16 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
   const [selectedMap, setSelectedMap] = useState<MapId>(DEFAULT_MAP_ID);
   const [isEquipmentOpen, setIsEquipmentOpen] = useState(false);
   const [isAmazonGuideOpen, setIsAmazonGuideOpen] = useState(false);
-  const [selectionVolume, setSelectionVolume] = useState(1);
+  const { selectionVolume } = useAudioSettings();
   const [isSelectionMusicPlaying, setIsSelectionMusicPlaying] = useState(false);
   const selectionAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const selectedChar = CHARACTERS[selectedCharIndex];
+  useEffect(() => {
+    if (selectionAudioRef.current) {
+      selectionAudioRef.current.volume = getSelectionMusicVolume(selectedChar.id, selectionVolume);
+    }
+  }, [selectionVolume, selectedChar.id]);
   const difficultyMeta = getDifficulty(selectedDifficulty);
   const claimableMissions = countClaimableMissions(savedData);
   const selectedCharHasMusic = Boolean(CHARACTER_SELECTION_MUSIC[selectedChar.id]);
@@ -155,7 +164,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
   };
 
   const handleSelectionVolumeChange = (vol: number) => {
-    setSelectionVolume(vol);
+    updateAudioSettings({ selectionVolume: vol });
     if (selectionAudioRef.current) {
       selectionAudioRef.current.volume = getSelectionMusicVolume(selectedChar.id, vol);
     }

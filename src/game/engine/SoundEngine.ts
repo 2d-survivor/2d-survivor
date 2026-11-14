@@ -161,7 +161,7 @@ export class SoundEngine {
 
   public muted: boolean = false;
   public sfxVolume: number = 0.5;
-  public bgmVolume: number = 0.3;
+  public bgmVolume: number = 0.5;
 
   private lastPlayedTimestamps: Record<string, number> = {};
   private bgmAudio: HTMLAudioElement | null = null;
