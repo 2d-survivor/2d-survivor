@@ -421,6 +421,48 @@ export const WEAPON_REGISTRY: Record<WeaponId, WeaponMeta> = {
       `Nv.${lv}: investida com ${30 + lv * 8} de dano, perfuração total e recuo.`
     ),
   },
+  morcegos_vampiros: {
+    id: 'morcegos_vampiros',
+    name: 'Enxame de Morcegos Vampiros',
+    description: 'Invoca morcegos mágicos que perseguem os inimigos próximos e drenam vida para o herói.',
+    maxLevel: 10,
+    iconName: 'Moon',
+    synergyPassive: 'raiz_ginseng',
+    evolvedId: 'morcegos_vampiros',
+    evolvedName: 'Enxame de Morcegos Vampiros',
+    evolvedDescription: 'Invoca morcegos mágicos que perseguem os inimigos próximos e drenam vida para o herói.',
+    levelDescriptions: levels10((lv) =>
+      `Nv.${lv}: ${3 + Math.floor(lv / 2)} morcegos com ${8 + lv * 3} de dano mágico. Cada 8 acertos curam 1 HP.`
+    ),
+  },
+  raizes_sanguessugas: {
+    id: 'raizes_sanguessugas',
+    name: 'Raízes Sanguessugas',
+    description: 'Faz brotar um círculo de raízes ao redor do herói que prende e drena a vida dos inimigos.',
+    maxLevel: 10,
+    iconName: 'Sprout',
+    synergyPassive: 'olho_gato_maracaja',
+    evolvedId: 'raizes_sanguessugas',
+    evolvedName: 'Raízes Sanguessugas',
+    evolvedDescription: 'Faz brotar um círculo de raízes ao redor do herói que prende e drena a vida dos inimigos.',
+    levelDescriptions: levels10((lv) =>
+      `Nv.${lv}: raízes em raio ${72 + lv * 4} drenam ${3 + lv * 2} de vida por tick e aplicam 30% de lentidão.`
+    ),
+  },
+  lamina_obsidiana: {
+    id: 'lamina_obsidiana',
+    name: 'Lâmina de Obsidiana',
+    description: 'Corta em arco largo à frente do herói, aplicando sangramento. Quanto menor o HP, maior o dano.',
+    maxLevel: 10,
+    iconName: 'Swords',
+    synergyPassive: 'vigor_anta',
+    evolvedId: 'lamina_obsidiana',
+    evolvedName: 'Lâmina de Obsidiana',
+    evolvedDescription: 'Corta em arco largo à frente do herói, aplicando sangramento. Quanto menor o HP, maior o dano.',
+    levelDescriptions: levels10((lv) =>
+      `Nv.${lv}: corte em arco com ${18 + lv * 5} de dano, sangramento e até +50% de dano conforme o HP perdido.`
+    ),
+  },
   furia_onca_acu: {
     id: 'furia_onca_acu',
     name: 'Fúria da Onça-Açu',

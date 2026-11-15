@@ -31,6 +31,8 @@ import {
   Dumbbell,
   Bike,
   Hand,
+  Moon,
+  Sprout,
 } from 'lucide-react';
 
 export function renderWeaponIcon(id: WeaponId, sizeClass: string = 'w-4 h-4'): React.ReactNode {
@@ -90,6 +92,12 @@ export function renderWeaponIcon(id: WeaponId, sizeClass: string = 'w-4 h-4'): R
       return <Crosshair className={`${sizeClass} text-slate-200`} />;
     case 'arrancada_sucuri':
       return <Zap className={`${sizeClass} text-green-700`} />;
+    case 'morcegos_vampiros':
+      return <Moon className={`${sizeClass} text-purple-400`} />;
+    case 'raizes_sanguessugas':
+      return <Sprout className={`${sizeClass} text-red-700`} />;
+    case 'lamina_obsidiana':
+      return <Swords className={`${sizeClass} text-purple-500`} />;
     default:
       return <Flame className={`${sizeClass} text-amber-400`} />;
   }
@@ -205,6 +213,10 @@ export function renderNamedIcon(
       return <Bike className={c('text-amber-300')} />;
     case 'Hand':
       return <Hand className={c('text-red-400')} />;
+    case 'Moon':
+      return <Moon className={c('text-purple-400')} />;
+    case 'Sprout':
+      return <Sprout className={c('text-green-500')} />;
     default:
       return <Flame className={c('text-amber-400')} />;
   }

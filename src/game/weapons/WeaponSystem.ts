@@ -30,7 +30,8 @@ export type ProjectileVisualType =
   | 'resin_drop'
   | 'tucano'
   | 'spider_web'
-  | 'sucuri';
+  | 'sucuri'
+  | 'vampire_bat';
 
 export interface Projectile {
   id: number;
@@ -149,9 +150,21 @@ export interface RingPulseEffect {
   maxLife: number;
 }
 
+/** Arc-shaped cut swept in front of the player (Obsidian Blade). */
+export interface ArcSlashEffect {
+  x: number;
+  y: number;
+  angle: number;
+  radius: number;
+  arc: number;
+  color: string;
+  life: number;
+  maxLife: number;
+}
+
 export interface GroundZoneEffect {
   id: number;
-  type: 'fire' | 'bio_cloud' | 'static_field';
+  type: 'fire' | 'bio_cloud' | 'static_field' | 'blood_roots';
   weaponId: WeaponId;
   x: number;
   y: number;
@@ -163,6 +176,7 @@ export interface GroundZoneEffect {
   maxLife: number;
   isEvolved: boolean;
   followPlayerSpeed?: number;
+  followPlayer?: boolean;
 }
 
 interface PendingStrike {
@@ -197,7 +211,7 @@ const ALL_PASSIVE_IDS: PassiveId[] = [
   'bio_shield',
 ];
 
-/** Amazon Forest catalogue: 15 attacks + 9 buffs, all capped at level 10. */
+/** Amazon Forest catalogue: 18 attacks + 9 buffs, all capped at level 10. */
 const AMAZON_WEAPON_IDS: WeaponId[] = [
   'garras_onca',
   'espinhos_pupunha',
@@ -214,6 +228,9 @@ const AMAZON_WEAPON_IDS: WeaponId[] = [
   'voo_tucano',
   'teia_aranha',
   'arrancada_sucuri',
+  'morcegos_vampiros',
+  'raizes_sanguessugas',
+  'lamina_obsidiana',
 ];
 
 const AMAZON_PASSIVE_IDS: PassiveId[] = [
@@ -239,6 +256,8 @@ export class WeaponSystem {
 
   public projectiles: Projectile[] = [];
   public slashEffects: SlashEffect[] = [];
+  private arcSlashes: ArcSlashEffect[] = [];
+  private vampireBatHits: number = 0;
   private vineLashes: VineLashAttack[] = [];
   private vineVariantIndex = 0;
 
@@ -572,6 +591,10 @@ export class WeaponSystem {
     for (let i = this.slashEffects.length - 1; i >= 0; i--) {
       this.slashEffects[i].life -= dt;
       if (this.slashEffects[i].life <= 0) this.slashEffects.splice(i, 1);
+    }
+    for (let i = this.arcSlashes.length - 1; i >= 0; i--) {
+      this.arcSlashes[i].life -= dt;
+      if (this.arcSlashes[i].life <= 0) this.arcSlashes.splice(i, 1);
     }
     for (let i = this.lightningStrikes.length - 1; i >= 0; i--) {
       this.lightningStrikes[i].life -= dt;
@@ -909,6 +932,21 @@ export class WeaponSystem {
       case 'arrancada_sucuri': {
         w.cooldownTimer = Math.max(1.1, 1.75 - w.level * 0.055) * cdFactor;
         this.triggerSucuriCharge(w, player, grid, sound);
+        break;
+      }
+      case 'morcegos_vampiros': {
+        w.cooldownTimer = Math.max(0.95, 1.55 - w.level * 0.05) * cdFactor;
+        this.triggerVampireBats(w, player, grid, sound);
+        break;
+      }
+      case 'raizes_sanguessugas': {
+        w.cooldownTimer = Math.max(2.5, 3.8 - w.level * 0.11) * cdFactor;
+        this.triggerLeechRoots(w, player, sound);
+        break;
+      }
+      case 'lamina_obsidiana': {
+        w.cooldownTimer = Math.max(0.9, 1.6 - w.level * 0.06) * cdFactor;
+        this.triggerObsidianBlade(w, player, grid, vfx, sound, onEnemyKilled);
         break;
       }
     }
@@ -2186,6 +2224,136 @@ export class WeaponSystem {
     if (w.id === player.character.startingWeapon) sound.playSlash();
   }
 
+  private triggerVampireBats(
+    w: WeaponInstance,
+    player: Player,
+    grid: SpatialGrid<Enemy>,
+    sound: SoundEngine
+  ): void {
+    const target = this.nearestAmazonTarget(player, grid);
+    const baseAngle = target
+      ? Math.atan2(target.y - player.y, target.x - player.x)
+      : Math.atan2(player.facingY, player.facingX);
+    const count = 3 + Math.floor(w.level / 2) + player.bonusAmount;
+    const speed = (300 + w.level * 6) * player.projectileSpeedMultiplier;
+    const baseDamage = (8 + w.level * 3) * player.might;
+    const life = 2.2 * player.durationMultiplier;
+
+    for (let i = 0; i < count; i++) {
+      const angle = baseAngle + (i - (count - 1) / 2) * 0.28;
+      this.projectiles.push({
+        id: this.nextProjId++,
+        type: 'vampire_bat',
+        x: player.x,
+        y: player.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        radius: (6 + Math.floor(w.level / 4)) * player.areaMultiplier,
+        damage: baseDamage,
+        pierce: 1 + Math.floor(w.level / 5) + player.bonusPierce,
+        homingTurnRate: 7,
+        knockForce: 90,
+        life,
+        maxLife: life,
+        weaponId: w.id,
+        isEvolved: false,
+        hitEnemyIds: new Set(),
+      });
+    }
+    if (w.id === player.character.startingWeapon) sound.playShoot();
+  }
+
+  private triggerLeechRoots(w: WeaponInstance, player: Player, sound: SoundEngine): void {
+    const radius = (72 + w.level * 4) * player.areaMultiplier;
+    const duration = (2.6 + w.level * 0.12) * player.durationMultiplier;
+
+    this.groundZones.push({
+      id: this.nextZoneId++,
+      type: 'blood_roots',
+      weaponId: w.id,
+      x: player.x,
+      y: player.y,
+      radius,
+      tickDamage: (3 + w.level * 2) * player.might,
+      tickInterval: 0.4,
+      tickTimer: 0.05,
+      life: duration,
+      maxLife: duration,
+      isEvolved: false,
+      followPlayer: true,
+    });
+    this.spawnRingPulse(player.x, player.y, radius, '#b91c1c', 0.34);
+    if (w.id === player.character.startingWeapon) sound.playHit();
+  }
+
+  private triggerObsidianBlade(
+    w: WeaponInstance,
+    player: Player,
+    grid: SpatialGrid<Enemy>,
+    vfx: VFXManager,
+    sound: SoundEngine,
+    onEnemyKilled: (enemy: Enemy) => void
+  ): void {
+    const target = this.nearestAmazonTarget(player, grid, 430);
+    const angle = target
+      ? Math.atan2(target.y - player.y, target.x - player.x)
+      : Math.atan2(player.facingY, player.facingX);
+    const range = (160 + w.level * 8) * player.areaMultiplier;
+    const arc = Math.PI * 0.9;
+    // +1% damage per 2% missing HP => up to +50% at 0 HP.
+    const hpLost = 1 - Math.max(0, Math.min(1, player.hp / player.maxHp));
+    const rageMultiplier = 1 + hpLost * 0.5;
+    const baseDamage = (18 + w.level * 5) * player.might * rageMultiplier;
+    const bleedDps = (4 + w.level * 2) * player.might;
+    const bleedDuration = 3.0 * player.durationMultiplier;
+
+    const victims = grid.queryRadius(player.x, player.y, range);
+    for (let i = 0; i < victims.length; i++) {
+      const enemy = victims[i];
+      if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+      const dx = enemy.x - player.x;
+      const dy = enemy.y - player.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > range + enemy.radius) continue;
+      const enemyAngle = Math.atan2(dy, dx);
+      let diff = enemyAngle - angle;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      if (Math.abs(diff) > arc / 2) continue;
+
+      const knockX = dist > 0.01 ? dx / dist : Math.cos(angle);
+      const knockY = dist > 0.01 ? dy / dist : Math.sin(angle);
+      this.dealHitToEnemy(
+        w,
+        enemy,
+        baseDamage,
+        player,
+        knockX,
+        knockY,
+        220,
+        grid,
+        vfx,
+        onEnemyKilled
+      );
+      if (enemy.hp > 0) {
+        enemy.applyBleed(bleedDps, bleedDps * 6, bleedDuration, w.id);
+      }
+      vfx.addSparks(enemy.x, enemy.y, '#a855f7', 4);
+    }
+
+    this.arcSlashes.push({
+      x: player.x,
+      y: player.y,
+      angle,
+      radius: range,
+      arc,
+      color: '#a855f7',
+      life: 0.22,
+      maxLife: 0.22,
+    });
+    if (w.id === player.character.startingWeapon) sound.playSlash();
+  }
+
   private performLightningBolt(
     w: WeaponInstance,
     strikeX: number,
@@ -2473,7 +2641,10 @@ export class WeaponSystem {
       }
 
       // Purifying Blaze creeps toward player!
-      if (z.followPlayerSpeed && z.followPlayerSpeed > 0) {
+      if (z.followPlayer) {
+        z.x = player.x;
+        z.y = player.y;
+      } else if (z.followPlayerSpeed && z.followPlayerSpeed > 0) {
         const dx = player.x - z.x;
         const dy = player.y - z.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -2488,14 +2659,17 @@ export class WeaponSystem {
         z.tickTimer = z.tickInterval;
         const w = this.weapons.get(z.weaponId);
         const victims = grid.queryRadius(z.x, z.y, z.radius);
+        let drained = 0;
 
         for (let v = 0; v < victims.length; v++) {
           const vic = victims[v];
           if (vic.hp <= 0) continue;
           if (z.type === 'bio_cloud') {
             vic.applySlow(0.4, 1.0);
+          } else if (z.type === 'blood_roots') {
+            vic.applySlow(0.3, z.tickInterval + 0.15);
           }
-          this.dealHitToEnemy(
+          const result = this.dealHitToEnemy(
             w,
             vic,
             z.tickDamage,
@@ -2510,6 +2684,14 @@ export class WeaponSystem {
             0,
             Math.random() < 0.5
           );
+          if (z.type === 'blood_roots') {
+            drained += result.dealt;
+          }
+        }
+
+        // Leeching roots return a fraction of the drained life to the hero.
+        if (z.type === 'blood_roots' && drained > 0 && player.hp > 0) {
+          player.heal(Math.min(6, drained * 0.03));
         }
       }
     }
@@ -2796,6 +2978,15 @@ export class WeaponSystem {
           );
         }
 
+        // Vampire bats siphon 1 HP back to the hero every 8 landed hits.
+        if (p.type === 'vampire_bat') {
+          this.vampireBatHits += 1;
+          if (this.vampireBatHits % 8 === 0) {
+            player.heal(1);
+            vfx.addSparks(player.x, player.y, '#ef4444', 3);
+          }
+        }
+
         // Supreme Serum bio-cloud on first hit
         if (p.spawnBioCloudOnHit) {
           p.spawnBioCloudOnHit = false;
@@ -2923,7 +3114,9 @@ export class WeaponSystem {
                                               ? '#e2e8f0'
                                               : p.type === 'sucuri'
                                                 ? '#166534'
-                                                : '#e2e8f0';
+                                                : p.type === 'vampire_bat'
+                                                  ? '#a855f7'
+                                                  : '#e2e8f0';
         vfx.addSparks(p.x, p.y, sparkColor, 3);
         if ((p.type === 'bow' && !enemy.isSubmerged) && p.weaponId === player.character.startingWeapon) sound.playBowHit();
 
@@ -2985,6 +3178,54 @@ export class WeaponSystem {
         ctx.arc(screen.x, screen.y, z.radius, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+      } else if (z.type === 'blood_roots') {
+        const gradient = ctx.createRadialGradient(
+          screen.x,
+          screen.y,
+          z.radius * 0.12,
+          screen.x,
+          screen.y,
+          z.radius
+        );
+        gradient.addColorStop(0, 'rgba(153, 27, 27, 0.12)');
+        gradient.addColorStop(0.65, 'rgba(127, 29, 29, 0.28)');
+        gradient.addColorStop(1, 'rgba(69, 10, 10, 0.42)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, z.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(153, 27, 27, 0.9)';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, z.radius * 0.94, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Curled roots radiating from the core toward the rim.
+        ctx.lineCap = 'round';
+        for (let root = 0; root < 12; root++) {
+          const angle = (root * Math.PI * 2) / 12;
+          const wobble = Math.sin(root * 1.7) * 0.18;
+          ctx.strokeStyle = root % 2 === 0 ? '#7f1d1d' : '#b91c1c';
+          ctx.lineWidth = 2 + (root % 3) * 0.6;
+          ctx.beginPath();
+          ctx.moveTo(
+            screen.x + Math.cos(angle) * z.radius * 0.2,
+            screen.y + Math.sin(angle) * z.radius * 0.2
+          );
+          ctx.quadraticCurveTo(
+            screen.x + Math.cos(angle + wobble) * z.radius * 0.6,
+            screen.y + Math.sin(angle + wobble) * z.radius * 0.6,
+            screen.x + Math.cos(angle - wobble * 0.6) * z.radius * 0.95,
+            screen.y + Math.sin(angle - wobble * 0.6) * z.radius * 0.95
+          );
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = 'rgba(248, 113, 113, 0.35)';
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, z.radius * 0.16, 0, Math.PI * 2);
+        ctx.fill();
       } else {
         ctx.fillStyle = 'rgba(56, 189, 248, 0.18)';
         ctx.strokeStyle = 'rgba(253, 224, 71, 0.7)';
@@ -3109,6 +3350,38 @@ export class WeaponSystem {
       ctx.fill();
       ctx.strokeStyle = s.color ?? (s.isEvolved ? '#fecaca' : '#ffffff');
       ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 3.1 Render wide arc cuts (Obsidian Blade)
+    for (let i = 0; i < this.arcSlashes.length; i++) {
+      const s = this.arcSlashes[i];
+      const screen = camera.worldToScreen(s.x, s.y);
+      const alpha = Math.max(0, s.life / s.maxLife);
+      const start = s.angle - s.arc / 2;
+      const end = s.angle + s.arc / 2;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.lineCap = 'round';
+
+      ctx.strokeStyle = 'rgba(76, 29, 149, 0.55)';
+      ctx.lineWidth = 12;
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, s.radius * 0.96, start, end);
+      ctx.stroke();
+
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, s.radius * 0.88, start, end);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(233, 213, 255, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, s.radius * 0.8, start, end);
       ctx.stroke();
       ctx.restore();
     }
@@ -3459,6 +3732,45 @@ export class WeaponSystem {
         ctx.arc(p.radius * 1.2, -p.radius * 0.18, p.radius * 0.16, 0, Math.PI * 2);
         ctx.arc(p.radius * 1.2, p.radius * 0.18, p.radius * 0.16, 0, Math.PI * 2);
         ctx.fill();
+      } else if (p.type === 'vampire_bat') {
+        // Small bat silhouette with violet aura and pale fangs.
+        ctx.fillStyle = 'rgba(168, 85, 247, 0.22)';
+        ctx.beginPath();
+        ctx.arc(0, 0, p.radius * 1.9, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#3b0764';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, p.radius * 0.8, p.radius * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#6b21a8';
+        ctx.beginPath();
+        ctx.moveTo(-p.radius * 0.35, 0);
+        ctx.quadraticCurveTo(-p.radius * 1.4, -p.radius * 1.2, -p.radius * 1.9, -p.radius * 0.2);
+        ctx.quadraticCurveTo(-p.radius * 1.2, p.radius * 0.1, -p.radius * 0.35, p.radius * 0.35);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(p.radius * 0.35, 0);
+        ctx.quadraticCurveTo(p.radius * 1.4, -p.radius * 1.2, p.radius * 1.9, -p.radius * 0.2);
+        ctx.quadraticCurveTo(p.radius * 1.2, p.radius * 0.1, p.radius * 0.35, p.radius * 0.35);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.moveTo(p.radius * 0.35, p.radius * 0.15);
+        ctx.lineTo(p.radius * 0.15, p.radius * 0.55);
+        ctx.lineTo(p.radius * 0.05, p.radius * 0.15);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(p.radius * 0.75, p.radius * 0.15);
+        ctx.lineTo(p.radius * 0.55, p.radius * 0.55);
+        ctx.lineTo(p.radius * 0.45, p.radius * 0.15);
+        ctx.closePath();
+        ctx.fill();
       }
 
       ctx.restore();
@@ -3657,7 +3969,7 @@ export class WeaponSystem {
       }
     }
 
-    // 2. New weapons (Amazon Forest uses its 15-attack catalogue and caps at 4 slots).
+    // 2. New weapons (Amazon Forest uses its 18-attack catalogue and caps at 4 slots).
     if (this.weapons.size < this.maxWeaponSlots) {
       const weaponPool = this.maxItemLevel ? AMAZON_WEAPON_IDS : ALL_WEAPON_IDS;
       for (const wId of weaponPool) {

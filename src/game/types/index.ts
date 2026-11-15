@@ -13,7 +13,10 @@ export type AmazonWeaponId =
   | 'gota_resina'
   | 'voo_tucano'
   | 'teia_aranha'
-  | 'arrancada_sucuri';
+  | 'arrancada_sucuri'
+  | 'morcegos_vampiros'
+  | 'raizes_sanguessugas'
+  | 'lamina_obsidiana';
 
 export type SupremeWeaponId =
   | 'furia_onca_acu'
