@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import { ForestStagePanel } from './ForestStagePanel';
+import { COMPANIONS } from '@/game/data/companions';
 import { HUDState, SpecialAbilityHUD } from '@/game/types';
 import { HUNTER_FISH_TARGET } from '@/game/data/hunterQuest';
 import { renderWeaponIcon, renderPassiveIcon } from './GameIcons';
@@ -22,7 +24,7 @@ interface HUDProps {
   isMuted: boolean;
   onToggleMute: () => void;
   difficultyName: string;
-  onClaimMission: (missionId: string) => void;
+
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -31,7 +33,7 @@ export const HUD: React.FC<HUDProps> = ({
   isMuted,
   onToggleMute,
   difficultyName,
-  onClaimMission,
+
 }) => {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -114,53 +116,12 @@ export const HUD: React.FC<HUDProps> = ({
           {/* Left: Mission Objectives, HP & Inventory */}
           <div className="flex flex-col gap-1.5 max-w-[46%] sm:max-w-none">
             {/* Amazon Forest Mission Objectives (compact, current turn only) */}
-            {objectives && (
-              <div className="w-56 max-w-full rounded-lg border border-emerald-800/60 bg-slate-950/85 px-2 py-1.5 shadow-lg backdrop-blur-sm">
-                <div className="mb-1 flex min-w-0 items-center justify-between gap-2 text-[9px] font-bold uppercase tracking-widest">
-                  <span className="shrink-0 text-emerald-300">Missão</span>
-                  <span className="truncate text-right text-slate-400">{objectives.turnLabel}</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  {objectives.missions.map((mission) => {
-                    const claimable = mission.claimable;
-                    return (
-                      <button
-                        key={mission.id}
-                        type="button"
-                        disabled={!claimable}
-                        onClick={claimable ? () => onClaimMission(mission.id) : undefined}
-                        className={`w-full rounded border px-1.5 py-1 text-left text-[10px] transition ${
-                          mission.claimed
-                            ? 'border-emerald-500/60 bg-emerald-950/50 text-emerald-200'
-                            : claimable
-                              ? 'pointer-events-auto animate-pulse cursor-pointer border-amber-400 bg-amber-950/50 text-amber-100 shadow-[0_0_12px_rgba(251,191,36,0.75)]'
-                              : 'border-slate-700/70 bg-slate-900/70 text-slate-100'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate">
-                            {mission.claimed ? '✓' : mission.complete ? '★' : '○'} {mission.title}
-                          </span>
-                          <span className="shrink-0 font-mono text-[9px] text-slate-300">
-                            {mission.progress}/{mission.target}
-                          </span>
-                        </div>
-                        {claimable && (
-                          <div className="mt-0.5 text-center text-[9px] font-black uppercase tracking-wider">
-                            Clique para Resgatar!
-                          </div>
-                        )}
-                        {mission.claimed && (
-                          <div className="mt-0.5 text-center text-[9px] font-bold uppercase tracking-wider text-emerald-300">
-                            Resgatado
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {objectives && <div className="w-56 max-w-full"><ForestStagePanel stage={objectives} /></div>}
+            {!!hud.companions?.length && <div className="w-56 max-w-full rounded-lg border border-cyan-900 bg-slate-950/85 p-2 text-[10px] text-cyan-100">
+              <p className="font-bold">Companheiros ativos</p>
+              <p>{hud.companions.map(id => COMPANIONS[id].icon + ' ' + COMPANIONS[id].name).join(' · ')}</p>
+              {hud.companions.includes('turtle') && <p>Escudo: {hud.companionShield ?? 0} PV</p>}
+            </div>}
 
             {/* Amazon Forest restricted inventory: 4 attack + 4 buff squares */}
             <div className="w-56 max-w-full rounded-lg border border-slate-700/80 bg-slate-950/85 px-2 py-1.5 shadow-lg backdrop-blur-sm">

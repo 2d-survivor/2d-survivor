@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { EquipmentItem, CharacterConfig, DifficultyId, GameEndSummary, HUDState, HunterQuestProgress, MapId, SavedGameData, UpgradeOption } from '@/game/types';
+import { EquipmentItem, CharacterConfig, DifficultyId, GameEndSummary, HUDState, HunterQuestProgress, MissionObjectivesHUD, MapId, SavedGameData, UpgradeOption } from '@/game/types';
 import { CHARACTERS } from '@/game/data/characters';
 import { loadSavedData } from '@/game/data/persistence';
 import { getDifficulty } from '@/game/data/difficulties';
@@ -39,6 +39,7 @@ const DEFAULT_HUD: HUDState = {
 };
 
 export const GameContainer: React.FC = () => {
+  const [hunterForest, setHunterForest] = useState<MissionObjectivesHUD | undefined>(undefined);
   const [hunterQuest, setHunterQuest] = useState<HunterQuestProgress | null>(null);
   const [equipmentReward, setEquipmentReward] = useState<EquipmentItem | null>(null);
   const [gameState, setGameState] = useState<GameState>('menu');
@@ -103,7 +104,8 @@ export const GameContainer: React.FC = () => {
       }
 
       const engine = new GameEngine(canvas, character, currentSavedData, difficulty, mapId, {
-        onHunterDialogue: quest => {
+        onHunterDialogue: (quest, forest) => {
+          setHunterForest(forest);
           setHunterQuest(quest);
           gameStateRef.current = 'hunter_dialogue'; setGameState('hunter_dialogue');
         },
@@ -204,9 +206,6 @@ export const GameContainer: React.FC = () => {
     }
   };
 
-  const handleClaimMission = (missionId: string) => {
-    engineRef.current?.claimAmazonMission(missionId);
-  };
 
   const handleResume = () => {
     if (engineRef.current) {
@@ -322,7 +321,6 @@ export const GameContainer: React.FC = () => {
           isMuted={isMuted}
           onToggleMute={handleToggleMute}
           difficultyName={getDifficulty(selectedDifficulty).name}
-          onClaimMission={handleClaimMission}
         />
       )}
 
@@ -343,7 +341,9 @@ export const GameContainer: React.FC = () => {
           Conversar com o caçador [E]
         </button>
       )}
-      {gameState === 'hunter_dialogue' && hunterQuest && <HunterDialogue quest={hunterQuest}
+      {gameState === 'hunter_dialogue' && hunterQuest && <HunterDialogue quest={hunterQuest} forest={hunterForest}
+        onAcceptForest={() => engineRef.current?.acceptForestStage()}
+        onDeliverForest={() => engineRef.current?.deliverForestStage()}
         onClose={closeHunterDialogue} onAccept={() => {
           engineRef.current?.acceptHunterMission(); closeHunterDialogue();
         }} onDeliver={() => {

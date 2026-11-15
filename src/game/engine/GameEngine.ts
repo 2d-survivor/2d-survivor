@@ -1,13 +1,16 @@
+import { CompanionSystem } from '../systems/CompanionSystem';
+import { unlockCompanion, normalizeCompanions } from '../data/companions';
+import { AmazonTurnState, ForestCounters, createForestStages, currentForestStage, forestStageView } from '../data/forestMissions';
 import {
   EquipmentItem,
   CharacterConfig,
+  CompanionId,
   DifficultyConfig,
   DifficultyId,
   GameEndSummary,
   HUDState,
   MapId,
   MissionObjectivesHUD,
-  AmazonMissionMetric,
   UpgradeOption,
   SavedGameData,
   WeaponId,
@@ -56,7 +59,7 @@ import { getDifficulty } from '../data/difficulties';
 import { applyRunToMissions } from '../data/missions';
 
 export interface GameEngineCallbacks {
-  onHunterDialogue?: (quest: HunterQuestProgress) => void;
+  onHunterDialogue?: (quest: HunterQuestProgress, forest?: MissionObjectivesHUD) => void;
   onAnacondaDialogue?: () => void;
   onEquipmentReward: (item: EquipmentItem) => void;
   onGorillaDialogue?: () => void;
@@ -153,128 +156,6 @@ const OBJECTIVE_ACT2_PREDATORS = 2;
 const OBJECTIVE_ACT2_START = 300;
 const OBJECTIVE_MAP_END = 1200;
 
-// Random Amazon Forest missions: seven options per phase, drawn before the run.
-const AMAZON_TURN_ENDS = [300, 900, 1200] as const;
-const AMAZON_TURN_LABELS: Record<1 | 2 | 3, string> = {
-  1: 'Fase 1 · 00:00–05:00',
-  2: 'Fase 2 · 05:00–15:00',
-  3: 'Fase 3 · 15:00–20:00',
-};
-
-interface AmazonMissionTemplate {
-  id: string;
-  title: string;
-  metric: AmazonMissionMetric;
-  target: number;
-}
-
-const AMAZON_MISSION_BANK: Record<1 | 2 | 3, AmazonMissionTemplate[]> = {
-  1: [
-    { id: 'a1_fruits', title: 'Coletar frutas', metric: 'fruits', target: 5 },
-    { id: 'a1_level', title: 'Alcançar nível', metric: 'level', target: 10 },
-    {
-      id: 'a1_water',
-      title: 'Bichos na água/praia',
-      metric: 'waterKills',
-      target: 15,
-    },
-    { id: 'a1_gold', title: 'Juntar ouro', metric: 'gold', target: 300 },
-    {
-      id: 'a1_predators',
-      title: 'Abater predadores',
-      metric: 'evolvedPredators',
-      target: 1,
-    },
-    {
-      id: 'a1_fruits_big',
-      title: 'Coleta reforçada',
-      metric: 'fruits',
-      target: 8,
-    },
-    { id: 'a1_gold_big', title: 'Ouro da mata', metric: 'gold', target: 500 },
-  ],
-  2: [
-    { id: 'a2_fruits', title: 'Coletar frutas', metric: 'fruits', target: 10 },
-    { id: 'a2_level', title: 'Alcançar nível', metric: 'level', target: 20 },
-    {
-      id: 'a2_water',
-      title: 'Bichos na água/praia',
-      metric: 'waterKills',
-      target: 30,
-    },
-    {
-      id: 'a2_predators',
-      title: 'Abater predadores',
-      metric: 'evolvedPredators',
-      target: 3,
-    },
-    {
-      id: 'a2_bosses',
-      title: 'Derrotar chefes',
-      metric: 'bosses',
-      target: 5,
-    },
-    {
-      id: 'a2_fruits_big',
-      title: 'Fartura da floresta',
-      metric: 'fruits',
-      target: 15,
-    },
-    { id: 'a2_gold', title: 'Fortuna verde', metric: 'gold', target: 800 },
-  ],
-  3: [
-    { id: 'a3_level', title: 'Alcançar nível', metric: 'level', target: 30 },
-    {
-      id: 'a3_water',
-      title: 'Bichos na água/praia',
-      metric: 'waterKills',
-      target: 50,
-    },
-    {
-      id: 'a3_predators',
-      title: 'Abater predadores',
-      metric: 'evolvedPredators',
-      target: 5,
-    },
-    { id: 'a3_gold', title: 'Juntar ouro', metric: 'gold', target: 1500 },
-    {
-      id: 'a3_bosses',
-      title: 'Derrotar chefes',
-      metric: 'bosses',
-      target: 8,
-    },
-    {
-      id: 'a3_fruits',
-      title: 'Colheita final',
-      metric: 'fruits',
-      target: 20,
-    },
-    {
-      id: 'a3_water_big',
-      title: 'Rio infestado',
-      metric: 'waterKills',
-      target: 75,
-    },
-  ],
-};
-
-interface AmazonMissionBaseline {
-  fruits: number;
-  waterKills: number;
-  evolvedPredators: number;
-  bosses: number;
-  gold: number;
-}
-
-interface AmazonTurnState {
-  turn: 1 | 2 | 3;
-  endTime: number;
-  missions: AmazonMissionTemplate[];
-  baseline: AmazonMissionBaseline;
-  claimedMissions: string[];
-  bonusApplied: boolean;
-}
-
 interface AmazonObjectivesState {
   fruitsCollected: number;
   waterKills: number;
@@ -285,8 +166,6 @@ interface AmazonObjectivesState {
   act1Complete: boolean;
   act2Complete: boolean;
   act3Complete: boolean;
-  act1RewardApplied: boolean;
-  act2RewardApplied: boolean;
 }
 
 const RIVER_PREDATOR_PREY: EnemyType[] = [
@@ -541,11 +420,10 @@ export class GameEngine {
     act1Complete: false,
     act2Complete: false,
     act3Complete: false,
-    act1RewardApplied: false,
-    act2RewardApplied: false,
   };
   private amazonTurns: AmazonTurnState[] = [];
-  private amazonCurrentTurn: number = 0;
+  private companions: CompanionSystem;
+  private unlockedCompanions: CompanionId[] = [];
 
   private callbacks: GameEngineCallbacks;
 
@@ -583,8 +461,7 @@ export class GameEngine {
     if (this.caveUnlocked) this.worldProps.unlockForestCave();
     this.difficulty = getDifficulty(difficultyId);
     this.waveDirector = new WaveDirector(this.difficulty, mapId, this.worldProps);
-    this.amazonTurns = this.createAmazonMissionTurns();
-    this.beginAmazonTurn(0);
+    this.amazonTurns = createForestStages(this.difficulty.id);
 
     this.player = new Player(withEquipment(character, savedData.inventories?.[character.id] ?? emptyInventory()), savedData.powerUps);
     // Randomize the hero spawn on the Amazon Forest and snap the camera to it
@@ -605,6 +482,10 @@ export class GameEngine {
       AMAZON_STARTING_WEAPON_BY_CHARACTER[character.id] ?? 'garras_onca',
       { maxWeaponSlots: 4, maxPassiveSlots: 4, maxItemLevel: 10 }
     );
+    this.weaponSystem.recalculatePlayerStats(this.player);
+    const companionSave = normalizeCompanions(savedData.inventories?.[character.id]?.unlockedCompanions, savedData.inventories?.[character.id]?.equippedCompanions);
+    this.unlockedCompanions = companionSave.unlockedCompanions;
+    this.companions = new CompanionSystem(this.player, companionSave.equippedCompanions);
     this.weaponSystem.recalculatePlayerStats(this.player);
     this.player.hp = this.player.maxHp;
 
@@ -672,7 +553,7 @@ export class GameEngine {
     if (this.isPaused || !this.canTalkToHunter() || !this.callbacks.onHunterDialogue) return false;
     this.hunterQuest = getHunterQuest(loadSavedData().inventories[this.player.character.id] ?? emptyInventory());
     this.pause(); this.input.handlePointerUp();
-    this.callbacks.onHunterDialogue({ ...this.hunterQuest });
+    this.callbacks.onHunterDialogue({ ...this.hunterQuest }, this.getHunterForestMission());
     return true;
   }
 
@@ -865,6 +746,7 @@ export class GameEngine {
       this.player.isInMud = false;
       this.player.isMired = false;
       this.player.terrainSpeedMultiplier = 1;
+      this.companions.update(dt, this.player, this.vfx);
       if (!this.player.update(dt, this.input)) { this.handlePlayerDeath(); return; }
       if (interactRequested && this.caveInterior.nearExit(this.player)) {
         this.insideCave = false;
@@ -955,6 +837,7 @@ export class GameEngine {
           : 1;
 
     // 2. Update Player
+    this.companions.update(dt, this.player, this.vfx);
     const playerAlive = this.player.update(dt, this.input);
     if (!playerAlive) {
       this.handlePlayerDeath();
@@ -2320,124 +2203,43 @@ export class GameEngine {
     }
   }
 
-  private createAmazonMissionTurns(): AmazonTurnState[] {
-    let count = 1;
-    if (this.difficulty.id === 'hard') {
-      count = 2;
-    } else if (this.difficulty.id === 'nightmare' || this.difficulty.id === 'infernal') {
-      count = 3;
-    }
-
-    return ([1, 2, 3] as const).map((turn) => {
-      const options = [...AMAZON_MISSION_BANK[turn]];
-      for (let i = options.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [options[i], options[j]] = [options[j], options[i]];
-      }
-      return {
-        turn,
-        endTime: AMAZON_TURN_ENDS[turn - 1],
-        missions: options.slice(0, count),
-        baseline: {
-          fruits: 0,
-          waterKills: 0,
-          evolvedPredators: 0,
-          bosses: 0,
-          gold: 0,
-        },
-        claimedMissions: [],
-        bonusApplied: false,
-      };
-    });
+  private forestCounters(): ForestCounters {
+    return { fruits: this.amazonObjectives.fruitsCollected, waterKills: this.amazonObjectives.waterKills,
+      evolvedPredators: this.amazonObjectives.evolvedPredatorsDefeated, bosses: this.amazonObjectives.folkloreBossesDefeated,
+      gold: this.goldCollected, level: this.player.level };
   }
 
-  private beginAmazonTurn(index: number): void {
-    this.amazonCurrentTurn = index;
-    const turn = this.amazonTurns[index];
-    if (!turn) return;
-    turn.baseline = {
-      fruits: this.amazonObjectives.fruitsCollected,
-      waterKills: this.amazonObjectives.waterKills,
-      evolvedPredators: this.amazonObjectives.evolvedPredatorsDefeated,
-      bosses: this.amazonObjectives.folkloreBossesDefeated,
-      gold: this.goldCollected,
-    };
+  public getHunterForestMission(): MissionObjectivesHUD | undefined {
+    if (!this.waveDirector.isAmazonForest) return undefined;
+    const time = this.waveDirector.survivalTime;
+    return forestStageView(currentForestStage(this.amazonTurns, time), this.forestCounters(), time, this.unlockedCompanions);
   }
 
-  private getAmazonMissionProgress(
-    turn: AmazonTurnState,
-    mission: AmazonMissionTemplate
-  ): number {
-    switch (mission.metric) {
-      case 'level':
-        return this.player.level;
-      case 'fruits':
-        return this.amazonObjectives.fruitsCollected - turn.baseline.fruits;
-      case 'waterKills':
-        return this.amazonObjectives.waterKills - turn.baseline.waterKills;
-      case 'evolvedPredators':
-        return (
-          this.amazonObjectives.evolvedPredatorsDefeated - turn.baseline.evolvedPredators
-        );
-      case 'bosses':
-        return this.amazonObjectives.folkloreBossesDefeated - turn.baseline.bosses;
-      case 'gold':
-        return this.goldCollected - turn.baseline.gold;
-      default:
-        return 0;
-    }
-  }
-
-  private updateAmazonMissionTurn(): void {
-    if (!this.waveDirector.isAmazonForest) return;
-    const turn = this.amazonTurns[this.amazonCurrentTurn];
-    if (!turn) return;
-
-    // The next phase only starts when the clock reaches its exact time. Any
-    // objective completed but not claimed before then is lost.
-    if (this.waveDirector.survivalTime < turn.endTime) return;
-
-    if (this.amazonCurrentTurn < this.amazonTurns.length - 1) {
-      this.beginAmazonTurn(this.amazonCurrentTurn + 1);
-    }
-  }
-
-  public claimAmazonMission(missionId: string): boolean {
-    if (!this.waveDirector.isAmazonForest) return false;
-    const turn = this.amazonTurns[this.amazonCurrentTurn];
-    if (!turn) return false;
-    if (this.waveDirector.survivalTime >= turn.endTime) return false;
-
-    const mission = turn.missions.find((item) => item.id === missionId);
-    if (!mission || turn.claimedMissions.includes(mission.id)) return false;
-    if (this.getAmazonMissionProgress(turn, mission) < mission.target) return false;
-
-    turn.claimedMissions.push(mission.id);
-    this.sound.playMissionClaim();
-    if (!turn.bonusApplied) {
-      turn.bonusApplied = true;
-      this.applyAmazonTurnBonus(turn.turn);
-    }
+  public acceptForestStage(): boolean {
+    if (!this.isPaused || !this.canTalkToHunter() || this.getHunterForestMission()?.status !== 'available') return false;
+    const stage = currentForestStage(this.amazonTurns, this.waveDirector.survivalTime);
+    stage.baseline = { ...this.forestCounters() };
+    stage.accepted = true;
     this.syncHUD();
+    this.callbacks.onHunterDialogue?.({ ...this.hunterQuest }, this.getHunterForestMission());
     return true;
   }
 
-  private applyAmazonTurnBonus(turn: 1 | 2 | 3): void {
-    this.sound.playLevelUp();
-    this.vfx.triggerFlash('#fbbf24', 0.25);
-    if (turn === 1) {
-      this.amazonObjectives.act1RewardApplied = true;
-      this.player.objectiveSpeedBonus = Math.max(this.player.objectiveSpeedBonus, 0.1);
-      this.weaponSystem.recalculatePlayerStats(this.player);
-    } else if (turn === 2) {
-      this.amazonObjectives.act2RewardApplied = true;
-      this.player.objectiveMightBonus = Math.max(this.player.objectiveMightBonus, 0.2);
-      this.player.objectiveRecoveryBonus = Math.max(this.player.objectiveRecoveryBonus, 1);
-      this.weaponSystem.recalculatePlayerStats(this.player);
-    } else {
-      this.goldCollected += 300;
-      this.vfx.addDamageNumber(this.player.x, this.player.y, 300, true, true);
-    }
+  public deliverForestStage(): boolean {
+    if (!this.isPaused || !this.canTalkToHunter() || this.getHunterForestMission()?.status !== 'ready') return false;
+    const stage = currentForestStage(this.amazonTurns, this.waveDirector.survivalTime);
+    const reward = this.getHunterForestMission()!.reward;
+    const data = loadSavedData();
+    const id = this.player.character.id;
+    const inventory = data.inventories[id] ?? emptyInventory();
+    const next = unlockCompanion(inventory, reward);
+    saveGameData({ ...data, inventories: { ...data.inventories, [id]: next } });
+    this.unlockedCompanions = next.unlockedCompanions ?? [];
+    stage.delivered = true;
+    this.sound.playMissionClaim();
+    this.syncHUD();
+    this.callbacks.onHunterDialogue?.({ ...this.hunterQuest }, this.getHunterForestMission());
+    return true;
   }
 
   private trackAmazonObjectiveKill(enemy: Enemy): void {
@@ -2463,7 +2265,7 @@ export class GameEngine {
   private updateAmazonObjectives(): boolean {
     if (!this.waveDirector.isAmazonForest) return false;
 
-    this.updateAmazonMissionTurn();
+
 
     const objectives = this.amazonObjectives;
 
@@ -2495,42 +2297,6 @@ export class GameEngine {
     }
 
     return false;
-  }
-
-  private buildObjectivesHUD(): MissionObjectivesHUD {
-    const turn = this.amazonTurns[this.amazonCurrentTurn];
-    if (!turn) {
-      return {
-        turn: 1,
-        turnLabel: AMAZON_TURN_LABELS[1],
-        missions: [],
-      };
-    }
-
-    return {
-      turn: turn.turn,
-      turnLabel: AMAZON_TURN_LABELS[turn.turn],
-      missions: turn.missions.map((mission) => {
-        const progress = Math.min(
-          mission.target,
-          Math.max(0, this.getAmazonMissionProgress(turn, mission))
-        );
-        const claimed = turn.claimedMissions.includes(mission.id);
-        const complete = progress >= mission.target;
-        return {
-          id: mission.id,
-          title: mission.title,
-          progress,
-          target: mission.target,
-          complete,
-          claimed,
-          claimable:
-            complete &&
-            !claimed &&
-            this.waveDirector.survivalTime < turn.endTime,
-        };
-      }),
-    };
   }
 
   /** Emit hit feedback only when an attack actually removes health. */
@@ -3142,7 +2908,9 @@ export class GameEngine {
       passives: passivesList,
       activeBoss,
       eventAlert: this.waveDirector.eventAlert || undefined,
-      objectives: this.buildObjectivesHUD(),
+      objectives: this.getHunterForestMission(),
+      companions: [...this.companions.ids],
+      companionShield: Math.ceil(this.player.companionShield),
       specialAbilities,
     });
   }
@@ -3153,6 +2921,7 @@ export class GameEngine {
     if (this.insideCave) {
       this.caveInterior.render(ctx, camera, this.player, this.caveUnlocked, this.caveRewardClaimed);
       this.player.render(ctx, camera);
+      this.companions.render(ctx, camera, this.player);
       return;
     }
     // 1. Clear & Render Floor Tile Pattern
@@ -3201,6 +2970,7 @@ export class GameEngine {
     }
     if (this.kopenawaAvailable && this.kopenawaNpc && this.player.y >= this.kopenawaNpc.y) this.kopenawaNpc.render(ctx, camera);
     this.player.render(ctx, camera);
+      this.companions.render(ctx, camera, this.player);
     if (this.anacondaAvailable && this.anacondaNpc && this.player.y < this.anacondaNpc.y) this.anacondaNpc.render(ctx, camera);
     if (this.tribeHunter && this.player.y < this.tribeHunter.y) this.tribeHunter.render(ctx, camera, this.hunterQuest.completed);
     if (this.kopenawaAvailable && this.kopenawaNpc && this.player.y < this.kopenawaNpc.y) this.kopenawaNpc.render(ctx, camera);

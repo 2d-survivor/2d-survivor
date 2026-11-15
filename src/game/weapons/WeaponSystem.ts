@@ -198,7 +198,7 @@ const ALL_PASSIVE_IDS: PassiveId[] = [
   'bio_shield',
 ];
 
-/** Amazon Forest catalogue: 15 attacks + 9 buffs, all capped at level 10. */
+/** Amazon Forest catalogue: 15 attacks and all 22 passives, capped at level 10. */
 const AMAZON_WEAPON_IDS: WeaponId[] = [
   'garras_onca',
   'espinhos_pupunha',
@@ -218,6 +218,7 @@ const AMAZON_WEAPON_IDS: WeaponId[] = [
 ];
 
 const AMAZON_PASSIVE_IDS: PassiveId[] = [
+  ...ALL_PASSIVE_IDS,
   'casco_tartaruga',
   'energia_guarana',
   'raiz_ginseng',
@@ -241,7 +242,6 @@ export class WeaponSystem {
   public projectiles: Projectile[] = [];
   public slashEffects: SlashEffect[] = [];
   private vineLashes: VineLashAttack[] = [];
-  private vineVariantIndex = 0;
 
   public clearVineLashes(): void { this.vineLashes = []; }
   public lightningStrikes: LightningStrikeEffect[] = [];
@@ -460,7 +460,7 @@ export class WeaponSystem {
     player.pickupRadius = 65 + (b.pickupRadius || 0);
     player.xpMultiplier = 1.0 + (b.xpMultiplier || 0);
     player.goldMultiplier = 1.0 + (perm.greed || 0) * 0.15;
-    player.speed = player.baseSpeed * (1 + player.objectiveSpeedBonus + player.lulaLevelMovementBonus);
+    player.speed = player.baseSpeed * (1 + player.objectiveSpeedBonus + player.lulaLevelMovementBonus + player.companionSpeedBonus);
 
     // Apply all base passives
     const spinach = this.passives.get('spinach');
@@ -918,7 +918,7 @@ export class WeaponSystem {
       }
       case 'chicotada_cipo': {
         w.cooldownTimer = Math.max(0.74, 1.15 - w.level * 0.035) * cdFactor;
-        this.triggerVineLash(w, player, grid);
+        this.triggerVineLash(w, player);
         break;
       }
       case 'enxame_mutuca': {
@@ -1941,19 +1941,14 @@ export class WeaponSystem {
     }
   }
 
-  private triggerVineLash(w: WeaponInstance, player: Player, grid: SpatialGrid<Enemy>): void {
+  private triggerVineLash(w: WeaponInstance, player: Player): void {
     const reach = (220 + 14 * w.level) * player.areaMultiplier;
-    const targets = grid.queryRadius(player.x, player.y, reach)
-      .filter(enemy => enemy.hp > 0 && !enemy.isSubmerged)
-      .sort((a, b) => (a.x - player.x) ** 2 + (a.y - player.y) ** 2 -
-        ((b.x - player.x) ** 2 + (b.y - player.y) ** 2));
-    const target = targets[0];
-    const dx = target ? target.x - player.x : player.facingX;
-    const dy = target ? target.y - player.y : player.facingY;
-    const angle = Math.hypot(dx, dy) > 0.001 ? Math.atan2(dy, dx) : Math.atan2(player.facingY, player.facingX);
+    // Match the sprite's facing side and always sweep from the upper to lower edge.
+    const facingLeft = player.facingX < 0;
+    const angle = facingLeft ? Math.PI : 0;
     this.vineLashes.push({
       weapon: w, x: player.x, y: player.y, angle, elapsed: 0, reach,
-      variant: (['clockwise', 'counterclockwise', 'wave'] as const)[this.vineVariantIndex++ % 3],
+      variant: facingLeft ? 'counterclockwise' : 'clockwise',
       area: player.areaMultiplier, damage: (22 + 6 * w.level) * player.might,
       slowDuration: 0.8 * player.durationMultiplier, hitEnemyIds: new Set(),
     });
@@ -3801,7 +3796,7 @@ export class WeaponSystem {
       }
     }
 
-    // 4. New passives (Amazon Forest uses its 10-buff catalogue and caps at 4 slots).
+    // 4. New passives (Amazon Forest offers all passives and caps equipped slots at 4).
     if (this.passives.size < this.maxPassiveSlots) {
       const passivePool = this.maxItemLevel ? AMAZON_PASSIVE_IDS : ALL_PASSIVE_IDS;
       for (const pId of passivePool) {

@@ -103,6 +103,8 @@ export class Player {
   public knockbackVY: number = 0;
   public attackSpeedBoostTimer: number = 0;
   public shieldTimer: number = 0;
+  public companionShield: number = 0;
+  public companionSpeedBonus: number = 0;
   // Thorn bush wound: damage every second until cured by the São-Caetano herb.
   public bleedTimer: number = 0;
   public bleedTickTimer: number = 0;
@@ -589,7 +591,9 @@ export class Player {
     // Pupunha shield: halve incoming damage while the buff lasts.
     const shieldedAmount = this.shieldTimer > 0 ? amount * 0.5 : amount;
     const reducedAmount = Math.max(1, Math.max(1, Math.round(shieldedAmount - this.armor)) * (1 - Math.min(0.9, Math.max(0, this.character.statBonuses.damageReduction ?? 0))));
-    this.hp -= reducedAmount;
+    const absorbed = Math.min(this.companionShield, reducedAmount);
+    this.companionShield -= absorbed;
+    this.hp -= reducedAmount - absorbed;
     this.invulnerableTimer = 0.5; // Half-second i-frames
 
     if (this.hp <= 0) {
