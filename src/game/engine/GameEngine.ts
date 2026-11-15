@@ -324,6 +324,9 @@ const SPECIAL_1_TRAIL_DAMAGE = 4;
 const SPECIAL_1_TRAIL_DURATION = 3.2;
 const SPECIAL_1_PUSH_FORCE = 320;
 
+// Derson's Special 2 — Chuva de Pão de Queijo.
+const SPECIAL_2_COOLDOWN = 25;
+
 export class GameEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -341,6 +344,7 @@ export class GameEngine {
   public difficulty: DifficultyConfig;
 
   private specialCooldown = 0;
+  private special2Cooldown = 0;
   private specialActiveTimer = 0;
   private specialTrailTimer = 0;
   private specialTrailId = 1;
@@ -748,8 +752,21 @@ export class GameEngine {
   }
 
   private activateSpecial(slot: number): void {
-    if (slot !== 1 || this.player.character.id !== 'derson') return;
-    if (this.specialCooldown > 0 || this.specialActiveTimer > 0 || this.insideCave) return;
+    if (this.player.character.id !== 'derson' || this.insideCave) return;
+
+    if (slot === 2) {
+      if (this.special2Cooldown > 0) return;
+      this.special2Cooldown = SPECIAL_2_COOLDOWN;
+      this.weaponSystem.spawnCheeseBreadRain(this.player);
+      this.weaponSystem.spawnRingPulse(this.player.x, this.player.y, 150, '#facc15', 0.4);
+      this.vfx.addSparks(this.player.x, this.player.y, '#facc15', 18);
+      this.camera.shake(0.18, 6);
+      this.sound.playSlash();
+      return;
+    }
+
+    if (slot !== 1) return;
+    if (this.specialCooldown > 0 || this.specialActiveTimer > 0) return;
 
     let dirX = this.input.dx;
     let dirY = this.input.dy;
@@ -773,6 +790,9 @@ export class GameEngine {
   private updateSpecialAbility(dt: number): void {
     if (this.specialCooldown > 0) {
       this.specialCooldown = Math.max(0, this.specialCooldown - dt);
+    }
+    if (this.special2Cooldown > 0) {
+      this.special2Cooldown = Math.max(0, this.special2Cooldown - dt);
     }
     if (this.specialActiveTimer <= 0) return;
 
@@ -3090,7 +3110,17 @@ export class GameEngine {
         unlocked: isDerson,
         active: isDerson && this.specialActiveTimer > 0,
       },
-      { key: '2', cooldown: 0, cooldownMax: 0, unlocked: false, active: false },
+      {
+        key: '2',
+        name: isDerson ? 'Chuva de Pão de Queijo' : undefined,
+        description: isDerson
+          ? 'Dispara 20 pães de queijo explosivos em 360°, causando dano em área, empurrando e atordoando a horda.'
+          : 'Especial exclusivo do Derson.',
+        cooldown: isDerson ? this.special2Cooldown : 0,
+        cooldownMax: SPECIAL_2_COOLDOWN,
+        unlocked: isDerson,
+        active: false,
+      },
       { key: '3', cooldown: 0, cooldownMax: 0, unlocked: false, active: false },
     ];
 

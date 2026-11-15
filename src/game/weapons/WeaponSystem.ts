@@ -61,6 +61,7 @@ export interface Projectile {
   bleedDuration?: number;
   slowFactor?: number;
   slowDuration?: number;
+  stunDuration?: number;
   poisonDps?: number;
   poisonDuration?: number;
   poisonContagious?: boolean;
@@ -556,6 +557,40 @@ export class WeaponSystem {
 
   public spawnRingPulse(x: number, y: number, radius: number, color: string, duration: number = 0.28): void {
     this.ringPulses.push({ x, y, radius, color, life: duration, maxLife: duration });
+  }
+
+  /** Derson's Special 2: twenty explosive cheese breads fired in every direction. */
+  public spawnCheeseBreadRain(player: Player): void {
+    const count = 20;
+    const speed = 340;
+    const life = 1.15;
+    const baseAngle = Math.random() * Math.PI * 2;
+    const spawnDistance = player.radius + 12;
+
+    for (let i = 0; i < count; i++) {
+      const angle = baseAngle + (i / count) * Math.PI * 2;
+      this.projectiles.push({
+        id: this.nextProjId++,
+        type: 'cheese_bread',
+        x: player.x + Math.cos(angle) * spawnDistance,
+        y: player.y + Math.sin(angle) * spawnDistance,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        radius: 10 * player.areaMultiplier,
+        damage: 26 * player.might,
+        pierce: 1,
+        knockForce: 340,
+        explosionRadius: 72 * player.areaMultiplier,
+        stunDuration: 1.4,
+        life,
+        maxLife: life,
+        weaponId: 'derson_combo',
+        isEvolved: false,
+        hitEnemyIds: new Set(),
+        spinAngle: angle,
+        spinSpeed: 9,
+      });
+    }
   }
 
   update(
@@ -2525,7 +2560,9 @@ export class WeaponSystem {
     player: Player,
     grid: SpatialGrid<Enemy>,
     vfx: VFXManager,
-    onEnemyKilled: (enemy: Enemy) => void
+    onEnemyKilled: (enemy: Enemy) => void,
+    stunDuration: number = 0,
+    pushForce: number = 70
   ): void {
     this.spawnRingPulse(x, y, radius, color, 0.24);
     vfx.addSparks(x, y, color, 5);
@@ -2541,11 +2578,12 @@ export class WeaponSystem {
         player,
         Math.cos(ang),
         Math.sin(ang),
-        70,
+        pushForce,
         grid,
         vfx,
         onEnemyKilled
       );
+      if (stunDuration > 0 && vic.hp > 0) vic.applyStun(stunDuration);
     }
   }
 
@@ -2737,6 +2775,22 @@ export class WeaponSystem {
       }
 
       if (p.life <= 0) {
+        if (p.explosionRadius && p.stunDuration) {
+          this.triggerSplashExplosion(
+            this.weapons.get(p.weaponId),
+            p.x,
+            p.y,
+            p.explosionRadius,
+            p.damage * 0.65,
+            '#facc15',
+            player,
+            grid,
+            vfx,
+            onEnemyKilled,
+            p.stunDuration,
+            p.knockForce ?? 70
+          );
+        }
         this.projectiles.splice(i, 1);
         continue;
       }
@@ -2818,7 +2872,22 @@ export class WeaponSystem {
         // Splash / Shockwave triggers
         p.pierceCountSoFar = (p.pierceCountSoFar || 0) + 1;
         if (p.explosionRadius && p.explosionRadius > 0) {
-          if (p.type === 'bow') {
+          if (p.stunDuration) {
+            this.triggerSplashExplosion(
+              w,
+              enemy.x,
+              enemy.y,
+              p.explosionRadius,
+              p.damage * 0.65,
+              '#facc15',
+              player,
+              grid,
+              vfx,
+              onEnemyKilled,
+              p.stunDuration,
+              p.knockForce ?? 70
+            );
+          } else if (p.type === 'bow') {
             if (enemy.isElite || enemy.isBoss || p.pierceCountSoFar % 3 === 1) {
               this.triggerSplashExplosion(
                 w,

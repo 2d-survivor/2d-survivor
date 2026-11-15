@@ -63,6 +63,7 @@ export class Enemy {
   // Combat Status & Debuffs
   public slowTimer: number = 0;
   public slowFactor: number = 0;
+  public stunTimer: number = 0;
   public vulnerableTimer: number = 0;
   public vulnerableBonus: number = 0;
   public poisonTimer: number = 0;
@@ -722,6 +723,11 @@ export class Enemy {
     this.slowTimer = Math.max(this.slowTimer, duration);
   }
 
+  public applyStun(duration: number): void {
+    const effective = this.isBoss ? duration * 0.25 : this.isElite ? duration * 0.6 : duration;
+    this.stunTimer = Math.max(this.stunTimer, effective);
+  }
+
   public applyVulnerability(bonus: number, duration: number): void {
     this.vulnerableBonus = Math.max(this.vulnerableBonus, bonus);
     this.vulnerableTimer = Math.max(this.vulnerableTimer, duration);
@@ -762,6 +768,9 @@ export class Enemy {
       this.slowTimer -= dt;
       if (this.slowTimer <= 0) this.slowFactor = 0;
     }
+    if (this.stunTimer > 0) {
+      this.stunTimer = Math.max(0, this.stunTimer - dt);
+    }
     if (this.vulnerableTimer > 0) {
       this.vulnerableTimer -= dt;
       if (this.vulnerableTimer <= 0) this.vulnerableBonus = 0;
@@ -790,6 +799,9 @@ export class Enemy {
     }
     this.knockbackX *= Math.pow(0.05, dt);
     this.knockbackY *= Math.pow(0.05, dt);
+
+    // Stunned enemies still slide with knockback but cannot move or attack.
+    if (this.stunTimer > 0) return this.hp > 0;
 
     const dx = player.x - this.x;
     const dy = player.y - this.y;

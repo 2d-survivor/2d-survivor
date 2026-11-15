@@ -316,7 +316,7 @@ export const HUD: React.FC<HUDProps> = ({
                 </span>
                 {slot.unlocked ? (
                   <>
-                    <span className="text-lg leading-none">{slot.active ? '💨' : '☕'}</span>
+                    <span className="text-lg leading-none">{slot.active ? '💨' : slot.key === '2' ? '🧀' : '☕'}</span>
                     <span className="mt-0.5 max-w-[60px] truncate px-1 text-[8px] font-bold uppercase tracking-wide text-amber-200">
                       {slot.name ?? 'Especial'}
                     </span>
@@ -346,7 +346,7 @@ export const HUD: React.FC<HUDProps> = ({
         {/* Bottom Hint for mobile/desktop */}
         <div className="flex justify-between items-end text-[10px] text-slate-400/80">
           <span className="hidden sm:inline">
-            WASD ou Setas para mover • SHIFT para dash • ESPAÇO para pular • 1 para especial • ESC para pausar
+            WASD ou Setas para mover • SHIFT para dash • ESPAÇO para pular • 1 e 2 para especiais • ESC para pausar
           </span>
           <span className="sm:hidden">Arraste para mover (Joystick Virtual)</span>
         </div>
