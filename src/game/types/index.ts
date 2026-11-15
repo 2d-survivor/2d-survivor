@@ -23,7 +23,10 @@ export type SupremeWeaponId =
   | 'metralha_floresta'
   | 'nuvem_biologica'
   | 'tempestade_lendaria'
-  | 'injecao_letal';
+  | 'injecao_letal'
+  | 'praga_noturna'
+  | 'pantano_devorador'
+  | 'furia_carmesim';
 
 export type WeaponId =
   | 'bottle_51'
@@ -62,7 +65,13 @@ export type AmazonPassiveId =
   | 'vigor_anta'
   | 'plumas_arara'
   | 'coracao_jacare'
-  | 'resiliencia_preguica';
+  | 'resiliencia_preguica'
+  | 'sede_sangue'
+  | 'seiva_sumauma'
+  | 'sifao_espiritual'
+  | 'veneno_ra_dardo'
+  | 'espinhos_vitoria'
+  | 'chama_boitata';
 
 export type PassiveId =
   | 'spinach'

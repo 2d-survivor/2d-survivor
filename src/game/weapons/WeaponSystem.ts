@@ -31,7 +31,8 @@ export type ProjectileVisualType =
   | 'tucano'
   | 'spider_web'
   | 'sucuri'
-  | 'vampire_bat';
+  | 'vampire_bat'
+  | 'blood_fire_wave';
 
 export interface Projectile {
   id: number;
@@ -211,7 +212,7 @@ const ALL_PASSIVE_IDS: PassiveId[] = [
   'bio_shield',
 ];
 
-/** Amazon Forest catalogue: 18 attacks + 9 buffs, all capped at level 10. */
+/** Amazon Forest catalogue: 18 attacks + 15 buffs, plus 8 fusions. */
 const AMAZON_WEAPON_IDS: WeaponId[] = [
   'garras_onca',
   'espinhos_pupunha',
@@ -243,6 +244,12 @@ const AMAZON_PASSIVE_IDS: PassiveId[] = [
   'plumas_arara',
   'coracao_jacare',
   'resiliencia_preguica',
+  'sede_sangue',
+  'seiva_sumauma',
+  'sifao_espiritual',
+  'veneno_ra_dardo',
+  'espinhos_vitoria',
+  'chama_boitata',
 ];
 
 export class WeaponSystem {
@@ -258,6 +265,9 @@ export class WeaponSystem {
   public slashEffects: SlashEffect[] = [];
   private arcSlashes: ArcSlashEffect[] = [];
   private vampireBatHits: number = 0;
+  private lifestealWindowTimer: number = 0;
+  private lifestealHealedInWindow: number = 0;
+  private siphonKillCount: number = 0;
   private vineLashes: VineLashAttack[] = [];
   private vineVariantIndex = 0;
 
@@ -300,7 +310,8 @@ export class WeaponSystem {
   }
 
   private passiveMaxLevel(id: PassiveId): number {
-    return this.maxItemLevel || PASSIVE_REGISTRY[id].maxLevel;
+    const baseMax = PASSIVE_REGISTRY[id].maxLevel;
+    return this.maxItemLevel ? Math.min(this.maxItemLevel, baseMax) : baseMax;
   }
 
   /** Clamp table lookups so level 10 never falls back to the level 1 value. */
@@ -568,6 +579,17 @@ export class WeaponSystem {
     const resilienciaPreguica = this.passives.get('resiliencia_preguica');
     player.stunResistance = resilienciaPreguica ? Math.min(1, resilienciaPreguica.level * 0.1) : 0;
 
+    const espinhosVitoria = this.passives.get('espinhos_vitoria');
+    if (espinhosVitoria) {
+      player.armor += espinhosVitoria.level;
+      player.areaMultiplier += espinhosVitoria.level * 0.05;
+    }
+
+    const chamaBoitata = this.passives.get('chama_boitata');
+    if (chamaBoitata) {
+      player.debuffDamageBonus += chamaBoitata.level * 0.08;
+    }
+
     player.cooldownReduction = Math.min(0.55, player.cooldownReduction);
     player.critChance = Math.min(0.85, player.critChance);
     player.hp = Math.min(player.hp, player.maxHp);
@@ -618,6 +640,15 @@ export class WeaponSystem {
         strike.execute();
       }
     }
+
+    // 2.1 Leech passives: reset the 6 HP/s crit-lifesteal budget once per second
+    // and apply the Sumaúma regeneration (doubled at low HP).
+    this.lifestealWindowTimer -= dt;
+    if (this.lifestealWindowTimer <= 0) {
+      this.lifestealWindowTimer += 1;
+      this.lifestealHealedInWindow = 0;
+    }
+    this.applySumaumaRecovery(dt, player);
 
     // Submerged ambush fauna cannot be seen, targeted or damaged by any
     // automatic weapon; the engine also keeps it out of the spatial grid.
@@ -694,12 +725,71 @@ export class WeaponSystem {
       vfx.addDamageNumber(enemy.x, enemy.y, amplified, isCrit);
     }
 
+    if (isCrit) {
+      this.trySedeDeSangue(player, vfx);
+    }
+
     if (dead) {
+      this.handleFusionKill(w?.id, player, vfx, enemy.x, enemy.y);
       this.handleOnDeathTriggers(enemy, player, grid, vfx, onEnemyKilled);
       onEnemyKilled(enemy);
     }
 
     return { dead, isCrit, dealt: amplified };
+  }
+
+  /** Fused-weapon on-kill effects (Praga Noturna heal burst, Fúria Carmesim siphon). */
+  private handleFusionKill(
+    weaponId: WeaponId | undefined,
+    player: Player,
+    vfx: VFXManager,
+    x: number,
+    y: number
+  ): void {
+    if (weaponId === 'praga_noturna') {
+      this.spawnRingPulse(x, y, 64 * player.areaMultiplier, '#84cc16', 0.28);
+      vfx.addSparks(x, y, '#84cc16', 6);
+      player.heal(2);
+    } else if (weaponId === 'furia_carmesim') {
+      player.heal(1);
+    }
+  }
+
+  /** Sede de Sangue: critical hits may siphon up to 6 HP per second. */
+  private trySedeDeSangue(player: Player, vfx: VFXManager): void {
+    const passive = this.passives.get('sede_sangue');
+    if (!passive || player.hp <= 0) return;
+    if (Math.random() >= passive.level * 0.02) return;
+
+    const remaining = 6 - this.lifestealHealedInWindow;
+    if (remaining <= 0) return;
+
+    const amount = Math.min(2, remaining);
+    this.lifestealHealedInWindow += amount;
+    player.heal(amount);
+    vfx.addSparks(player.x, player.y, '#ef4444', 2);
+  }
+
+  /** Seiva da Sumaúma: +0.5 HP/s per level, doubled below 35% HP. */
+  private applySumaumaRecovery(dt: number, player: Player): void {
+    const passive = this.passives.get('seiva_sumauma');
+    if (!passive || player.hp <= 0 || player.hp >= player.maxHp) return;
+
+    const lowHp = player.hp < player.maxHp * 0.35;
+    player.heal(passive.level * 0.5 * (lowHp ? 2 : 1) * dt);
+  }
+
+  /** Sifão Espiritual: heal 2 HP every 30/27/24/21/18 kills. */
+  public notifyEnemyKilled(player: Player): void {
+    const passive = this.passives.get('sifao_espiritual');
+    if (!passive) return;
+
+    this.siphonKillCount += 1;
+    const requiredKills = Math.max(18, 30 - (passive.level - 1) * 3);
+    if (this.siphonKillCount >= requiredKills) {
+      this.siphonKillCount -= requiredKills;
+      player.heal(2);
+    }
   }
 
   private handleOnDeathTriggers(
@@ -745,9 +835,10 @@ export class WeaponSystem {
       if (e.dotTickTimer <= 0) {
         e.dotTickTimer = 0.5;
         let totalTick = 0;
+        const poisonMultiplier = 1 + (this.passives.get('veneno_ra_dardo')?.level ?? 0) * 0.08;
 
         if (e.poisonTimer > 0 && e.poisonDps > 0) {
-          const pDmg = e.computeDamageTaken(e.poisonDps * 0.5, player.debuffDamageBonus);
+          const pDmg = e.computeDamageTaken(e.poisonDps * 0.5 * poisonMultiplier, player.debuffDamageBonus);
           totalTick += pDmg;
           if (e.poisonSourceWeapon) {
             const w = this.weapons.get(e.poisonSourceWeapon);
@@ -770,6 +861,11 @@ export class WeaponSystem {
             vfx.addDamageNumber(e.x, e.y - 6, totalTick, false);
           }
           if (e.hp <= 0) {
+            const killWeapon =
+              e.poisonTimer > 0 && e.poisonSourceWeapon
+                ? e.poisonSourceWeapon
+                : e.bleedSourceWeapon ?? undefined;
+            this.handleFusionKill(killWeapon, player, vfx, e.x, e.y);
             this.handleOnDeathTriggers(e, player, grid, vfx, onEnemyKilled);
             onEnemyKilled(e);
           }
@@ -947,6 +1043,21 @@ export class WeaponSystem {
       case 'lamina_obsidiana': {
         w.cooldownTimer = Math.max(0.9, 1.6 - w.level * 0.06) * cdFactor;
         this.triggerObsidianBlade(w, player, grid, vfx, sound, onEnemyKilled);
+        break;
+      }
+      case 'praga_noturna': {
+        w.cooldownTimer = Math.max(0.8, 1.35 - w.level * 0.04) * cdFactor;
+        this.triggerPragaNoturna(w, player, grid, sound);
+        break;
+      }
+      case 'pantano_devorador': {
+        w.cooldownTimer = Math.max(2.2, 3.4 - w.level * 0.1) * cdFactor;
+        this.triggerPantanoDevorador(w, player, sound);
+        break;
+      }
+      case 'furia_carmesim': {
+        w.cooldownTimer = Math.max(0.75, 1.4 - w.level * 0.055) * cdFactor;
+        this.triggerObsidianBlade(w, player, grid, vfx, sound, onEnemyKilled, true);
         break;
       }
     }
@@ -2286,25 +2397,93 @@ export class WeaponSystem {
     if (w.id === player.character.startingWeapon) sound.playHit();
   }
 
+  private triggerPragaNoturna(
+    w: WeaponInstance,
+    player: Player,
+    grid: SpatialGrid<Enemy>,
+    sound: SoundEngine
+  ): void {
+    const target = this.nearestAmazonTarget(player, grid);
+    const baseAngle = target
+      ? Math.atan2(target.y - player.y, target.x - player.x)
+      : Math.atan2(player.facingY, player.facingX);
+    const count = 5 + Math.floor(w.level / 2) + player.bonusAmount;
+    const speed = (330 + w.level * 8) * player.projectileSpeedMultiplier;
+    const baseDamage = (12 + w.level * 4) * player.might;
+    const life = 2.4 * player.durationMultiplier;
+
+    for (let i = 0; i < count; i++) {
+      const angle = baseAngle + (i - (count - 1) / 2) * 0.24;
+      this.projectiles.push({
+        id: this.nextProjId++,
+        type: 'vampire_bat',
+        x: player.x,
+        y: player.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        radius: (7 + Math.floor(w.level / 4)) * player.areaMultiplier,
+        damage: baseDamage,
+        pierce: 2 + Math.floor(w.level / 4) + player.bonusPierce,
+        homingTurnRate: 8,
+        knockForce: 90,
+        poisonDps: (6 + w.level * 2) * player.might,
+        poisonDuration: 3.5 * player.durationMultiplier,
+        poisonContagious: w.level >= 5,
+        life,
+        maxLife: life,
+        weaponId: w.id,
+        isEvolved: true,
+        hitEnemyIds: new Set(),
+      });
+    }
+    if (w.id === player.character.startingWeapon) sound.playShoot();
+  }
+
+  private triggerPantanoDevorador(w: WeaponInstance, player: Player, sound: SoundEngine): void {
+    const radius = (120 + w.level * 6) * player.areaMultiplier;
+    const duration = (3.4 + w.level * 0.14) * player.durationMultiplier;
+
+    this.groundZones.push({
+      id: this.nextZoneId++,
+      type: 'blood_roots',
+      weaponId: w.id,
+      x: player.x,
+      y: player.y,
+      radius,
+      tickDamage: (6 + w.level * 3) * player.might,
+      tickInterval: 0.35,
+      tickTimer: 0.05,
+      life: duration,
+      maxLife: duration,
+      isEvolved: true,
+      followPlayer: true,
+    });
+    this.spawnRingPulse(player.x, player.y, radius, '#991b1b', 0.4);
+    this.spawnRingPulse(player.x, player.y, radius * 0.65, '#84cc16', 0.3);
+    if (w.id === player.character.startingWeapon) sound.playHit();
+  }
+
   private triggerObsidianBlade(
     w: WeaponInstance,
     player: Player,
     grid: SpatialGrid<Enemy>,
     vfx: VFXManager,
     sound: SoundEngine,
-    onEnemyKilled: (enemy: Enemy) => void
+    onEnemyKilled: (enemy: Enemy) => void,
+    fused: boolean = false
   ): void {
     const target = this.nearestAmazonTarget(player, grid, 430);
     const angle = target
       ? Math.atan2(target.y - player.y, target.x - player.x)
       : Math.atan2(player.facingY, player.facingX);
-    const range = (160 + w.level * 8) * player.areaMultiplier;
+    const range = (fused ? 210 + w.level * 9 : 160 + w.level * 8) * player.areaMultiplier;
     const arc = Math.PI * 0.9;
     // +1% damage per 2% missing HP => up to +50% at 0 HP.
     const hpLost = 1 - Math.max(0, Math.min(1, player.hp / player.maxHp));
     const rageMultiplier = 1 + hpLost * 0.5;
-    const baseDamage = (18 + w.level * 5) * player.might * rageMultiplier;
-    const bleedDps = (4 + w.level * 2) * player.might;
+    const baseDamage =
+      (fused ? 28 + w.level * 7 : 18 + w.level * 5) * player.might * rageMultiplier;
+    const bleedDps = (fused ? 8 + w.level * 3 : 4 + w.level * 2) * player.might;
     const bleedDuration = 3.0 * player.durationMultiplier;
 
     const victims = grid.queryRadius(player.x, player.y, range);
@@ -2338,7 +2517,7 @@ export class WeaponSystem {
       if (enemy.hp > 0) {
         enemy.applyBleed(bleedDps, bleedDps * 6, bleedDuration, w.id);
       }
-      vfx.addSparks(enemy.x, enemy.y, '#a855f7', 4);
+      vfx.addSparks(enemy.x, enemy.y, fused ? '#f97316' : '#a855f7', 4);
     }
 
     this.arcSlashes.push({
@@ -2347,10 +2526,41 @@ export class WeaponSystem {
       angle,
       radius: range,
       arc,
-      color: '#a855f7',
+      color: fused ? '#f97316' : '#a855f7',
       life: 0.22,
       maxLife: 0.22,
     });
+
+    if (fused) {
+      const waveCount = 2 + Math.floor(w.level / 3) + player.bonusAmount;
+      const waveSpeed = 470 * player.projectileSpeedMultiplier;
+      const waveLife = 1.25 * player.durationMultiplier;
+
+      for (let i = 0; i < waveCount; i++) {
+        const waveAngle = angle + (i - (waveCount - 1) / 2) * 0.2;
+        this.projectiles.push({
+          id: this.nextProjId++,
+          type: 'blood_fire_wave',
+          x: player.x,
+          y: player.y,
+          vx: Math.cos(waveAngle) * waveSpeed,
+          vy: Math.sin(waveAngle) * waveSpeed,
+          radius: 18 * player.areaMultiplier,
+          damage: baseDamage * 0.55,
+          pierce: 999,
+          knockForce: 120,
+          bleedDps: bleedDps * 0.6,
+          bleedMaxDps: bleedDps * 4,
+          bleedDuration,
+          life: waveLife,
+          maxLife: waveLife,
+          weaponId: w.id,
+          isEvolved: true,
+          hitEnemyIds: new Set(),
+        });
+      }
+    }
+
     if (w.id === player.character.startingWeapon) sound.playSlash();
   }
 
@@ -2691,7 +2901,13 @@ export class WeaponSystem {
 
         // Leeching roots return a fraction of the drained life to the hero.
         if (z.type === 'blood_roots' && drained > 0 && player.hp > 0) {
-          player.heal(Math.min(6, drained * 0.03));
+          if (z.weaponId === 'pantano_devorador' && player.hp >= player.maxHp) {
+            // Pântano Devorador: at full HP the stolen life becomes a shield.
+            player.shieldTimer = Math.max(player.shieldTimer, 4);
+            this.spawnRingPulse(player.x, player.y, 52 * player.areaMultiplier, '#84cc16', 0.3);
+          } else {
+            player.heal(Math.min(6, drained * 0.03));
+          }
         }
       }
     }
@@ -3116,7 +3332,9 @@ export class WeaponSystem {
                                                 ? '#166534'
                                                 : p.type === 'vampire_bat'
                                                   ? '#a855f7'
-                                                  : '#e2e8f0';
+                                                  : p.type === 'blood_fire_wave'
+                                                    ? '#f97316'
+                                                    : '#e2e8f0';
         vfx.addSparks(p.x, p.y, sparkColor, 3);
         if ((p.type === 'bow' && !enemy.isSubmerged) && p.weaponId === player.character.startingWeapon) sound.playBowHit();
 
@@ -3771,6 +3989,30 @@ export class WeaponSystem {
         ctx.lineTo(p.radius * 0.45, p.radius * 0.15);
         ctx.closePath();
         ctx.fill();
+      } else if (p.type === 'blood_fire_wave') {
+        // Crimson fire crescent that pierces through the horde.
+        ctx.fillStyle = 'rgba(220, 38, 38, 0.3)';
+        ctx.beginPath();
+        ctx.arc(0, 0, p.radius * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#dc2626';
+        ctx.lineWidth = p.radius * 0.6;
+        ctx.beginPath();
+        ctx.arc(0, 0, p.radius * 0.95, -Math.PI * 0.55, Math.PI * 0.55);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#f97316';
+        ctx.lineWidth = p.radius * 0.34;
+        ctx.beginPath();
+        ctx.arc(0, 0, p.radius * 1.1, -Math.PI * 0.45, Math.PI * 0.45);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = p.radius * 0.16;
+        ctx.beginPath();
+        ctx.arc(0, 0, p.radius * 1.22, -Math.PI * 0.32, Math.PI * 0.32);
+        ctx.stroke();
       }
 
       ctx.restore();
@@ -3909,14 +4151,14 @@ export class WeaponSystem {
     return undefined;
   }
 
-  /** Returns one card per exact 10/10 fusion recipe currently owned. */
+  /** Returns one card per fusion recipe whose weapon and passive are both maxed. */
   private collectFusionOptions(): UpgradeOption[] {
     if (!this.maxItemLevel) return [];
     const ready: UpgradeOption[] = [];
     for (const recipe of FUSION_RECIPES) {
       const weapon = this.weapons.get(recipe.weaponId);
       const passive = this.passives.get(recipe.passiveId);
-      if (weapon?.level === 10 && passive?.level === 10) {
+      if (weapon && passive && weapon.level >= weapon.maxLevel && passive.level >= passive.maxLevel) {
         ready.push({
           type: 'fusion',
           id: recipe.resultId,
@@ -4021,7 +4263,7 @@ export class WeaponSystem {
       }
     }
 
-    // 4. New passives (Amazon Forest uses its 10-buff catalogue and caps at 4 slots).
+    // 4. New passives (Amazon Forest uses its 15-buff catalogue and caps at 4 slots).
     if (this.passives.size < this.maxPassiveSlots) {
       const passivePool = this.maxItemLevel ? AMAZON_PASSIVE_IDS : ALL_PASSIVE_IDS;
       for (const pId of passivePool) {

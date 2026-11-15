@@ -2551,6 +2551,7 @@ export class GameEngine {
     this.trackAmazonObjectiveKill(enemy);
 
     this.kills += 1;
+    this.weaponSystem.notifyEnemyKilled(this.player);
     this.vfx.addDeathBurst(
       enemy.x,
       enemy.y,

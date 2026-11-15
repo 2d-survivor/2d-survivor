@@ -33,6 +33,8 @@ import {
   Hand,
   Moon,
   Sprout,
+  Droplet,
+  Ghost,
 } from 'lucide-react';
 
 export function renderWeaponIcon(id: WeaponId, sizeClass: string = 'w-4 h-4'): React.ReactNode {
@@ -98,6 +100,12 @@ export function renderWeaponIcon(id: WeaponId, sizeClass: string = 'w-4 h-4'): R
       return <Sprout className={`${sizeClass} text-red-700`} />;
     case 'lamina_obsidiana':
       return <Swords className={`${sizeClass} text-purple-500`} />;
+    case 'praga_noturna':
+      return <Biohazard className={`${sizeClass} text-lime-400`} />;
+    case 'pantano_devorador':
+      return <Sprout className={`${sizeClass} text-red-800`} />;
+    case 'furia_carmesim':
+      return <Flame className={`${sizeClass} text-red-600`} />;
     default:
       return <Flame className={`${sizeClass} text-amber-400`} />;
   }
@@ -145,6 +153,18 @@ export function renderPassiveIcon(id: PassiveId, sizeClass: string = 'w-4 h-4'):
       return <Sparkles className={`${sizeClass} text-rose-400`} />;
     case 'resiliencia_preguica':
       return <Hourglass className={`${sizeClass} text-lime-400`} />;
+    case 'sede_sangue':
+      return <Droplet className={`${sizeClass} text-red-600`} />;
+    case 'seiva_sumauma':
+      return <Sprout className={`${sizeClass} text-emerald-400`} />;
+    case 'sifao_espiritual':
+      return <Ghost className={`${sizeClass} text-purple-300`} />;
+    case 'veneno_ra_dardo':
+      return <Biohazard className={`${sizeClass} text-lime-500`} />;
+    case 'espinhos_vitoria':
+      return <Sprout className={`${sizeClass} text-teal-500`} />;
+    case 'chama_boitata':
+      return <Flame className={`${sizeClass} text-orange-600`} />;
     default:
       return <Sparkles className={`${sizeClass} text-emerald-400`} />;
   }
@@ -217,6 +237,10 @@ export function renderNamedIcon(
       return <Moon className={c('text-purple-400')} />;
     case 'Sprout':
       return <Sprout className={c('text-green-500')} />;
+    case 'Droplet':
+      return <Droplet className={c('text-red-500')} />;
+    case 'Ghost':
+      return <Ghost className={c('text-purple-300')} />;
     default:
       return <Flame className={c('text-amber-400')} />;
   }

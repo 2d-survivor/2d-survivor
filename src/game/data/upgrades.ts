@@ -427,7 +427,7 @@ export const WEAPON_REGISTRY: Record<WeaponId, WeaponMeta> = {
     description: 'Invoca morcegos mágicos que perseguem os inimigos próximos e drenam vida para o herói.',
     maxLevel: 10,
     iconName: 'Moon',
-    synergyPassive: 'raiz_ginseng',
+    synergyPassive: 'sede_sangue',
     evolvedId: 'morcegos_vampiros',
     evolvedName: 'Enxame de Morcegos Vampiros',
     evolvedDescription: 'Invoca morcegos mágicos que perseguem os inimigos próximos e drenam vida para o herói.',
@@ -441,7 +441,7 @@ export const WEAPON_REGISTRY: Record<WeaponId, WeaponMeta> = {
     description: 'Faz brotar um círculo de raízes ao redor do herói que prende e drena a vida dos inimigos.',
     maxLevel: 10,
     iconName: 'Sprout',
-    synergyPassive: 'olho_gato_maracaja',
+    synergyPassive: 'seiva_sumauma',
     evolvedId: 'raizes_sanguessugas',
     evolvedName: 'Raízes Sanguessugas',
     evolvedDescription: 'Faz brotar um círculo de raízes ao redor do herói que prende e drena a vida dos inimigos.',
@@ -455,7 +455,7 @@ export const WEAPON_REGISTRY: Record<WeaponId, WeaponMeta> = {
     description: 'Corta em arco largo à frente do herói, aplicando sangramento. Quanto menor o HP, maior o dano.',
     maxLevel: 10,
     iconName: 'Swords',
-    synergyPassive: 'vigor_anta',
+    synergyPassive: 'sifao_espiritual',
     evolvedId: 'lamina_obsidiana',
     evolvedName: 'Lâmina de Obsidiana',
     evolvedDescription: 'Corta em arco largo à frente do herói, aplicando sangramento. Quanto menor o HP, maior o dano.',
@@ -531,6 +531,48 @@ export const WEAPON_REGISTRY: Record<WeaponId, WeaponMeta> = {
     evolvedDescription: 'Fusão suprema: ferrões bioquímicos explodem em veneno e corroem a horda.',
     levelDescriptions: levels10((lv) =>
       `Nv.${lv}: ferrão supremo com ${28 + lv * 7} de dano, veneno e explosão corrosiva.`
+    ),
+  },
+  praga_noturna: {
+    id: 'praga_noturna',
+    name: 'Praga Noturna',
+    description: 'Fusão suprema: morcegos peçonhentos explodem em uma onda de cura a cada abate.',
+    maxLevel: 10,
+    iconName: 'Biohazard',
+    synergyPassive: 'veneno_ra_dardo',
+    evolvedId: 'praga_noturna',
+    evolvedName: 'Praga Noturna',
+    evolvedDescription: 'Fusão suprema: morcegos peçonhentos explodem em uma onda de cura a cada abate.',
+    levelDescriptions: levels10((lv) =>
+      `Nv.${lv}: enxame com ${12 + lv * 4} de dano, veneno letal e cura de 2 HP em área por abate.`
+    ),
+  },
+  pantano_devorador: {
+    id: 'pantano_devorador',
+    name: 'Pântano Devorador',
+    description: 'Fusão suprema: raízes colossais drenam a horda e viram escudo quando a vida está cheia.',
+    maxLevel: 10,
+    iconName: 'Sprout',
+    synergyPassive: 'espinhos_vitoria',
+    evolvedId: 'pantano_devorador',
+    evolvedName: 'Pântano Devorador',
+    evolvedDescription: 'Fusão suprema: raízes colossais drenam a horda e viram escudo quando a vida está cheia.',
+    levelDescriptions: levels10((lv) =>
+      `Nv.${lv}: raízes em raio ${120 + lv * 6} drenam ${6 + lv * 3} por tick e geram escudo com vida cheia.`
+    ),
+  },
+  furia_carmesim: {
+    id: 'furia_carmesim',
+    name: 'Fúria Carmesim',
+    description: 'Fusão suprema: cada corte libera ondas de fogo sangrento que curam 1 HP por abate.',
+    maxLevel: 10,
+    iconName: 'Flame',
+    synergyPassive: 'chama_boitata',
+    evolvedId: 'furia_carmesim',
+    evolvedName: 'Fúria Carmesim',
+    evolvedDescription: 'Fusão suprema: cada corte libera ondas de fogo sangrento que curam 1 HP por abate.',
+    levelDescriptions: levels10((lv) =>
+      `Nv.${lv}: corte com ${28 + lv * 7} de dano, sangramento, ondas de fogo e cura de 1 HP por abate.`
     ),
   },
 };
@@ -796,6 +838,78 @@ export const PASSIVE_REGISTRY: Record<PassiveId, PassiveMeta> = {
         : `Nv.${lv}: -${lv * 10}% de duração de atordoamento.`
     ),
   },
+  sede_sangue: {
+    id: 'sede_sangue',
+    name: 'Sede de Sangue',
+    description: 'Golpes críticos podem drenar vida para o herói, com limite de cura por segundo.',
+    maxLevel: 5,
+    iconName: 'Droplet',
+    synergyWeapon: 'morcegos_vampiros',
+    levelDescriptions: Array.from({ length: 5 }, (_, index) => {
+      const level = index + 1;
+      return `Nv.${level}: +${level * 2}% de chance de recuperar 2 HP em golpes críticos (máx. 6 HP/s).`;
+    }),
+  },
+  seiva_sumauma: {
+    id: 'seiva_sumauma',
+    name: 'Seiva da Sumaúma',
+    description: 'Regenera HP continuamente e dobra a regeneração quando o herói está com menos de 35% de HP.',
+    maxLevel: 5,
+    iconName: 'Sprout',
+    synergyWeapon: 'raizes_sanguessugas',
+    levelDescriptions: Array.from({ length: 5 }, (_, index) => {
+      const level = index + 1;
+      return `Nv.${level}: +${(level * 0.5).toFixed(1)} HP/s de regeneração; dobra abaixo de 35% de HP.`;
+    }),
+  },
+  sifao_espiritual: {
+    id: 'sifao_espiritual',
+    name: 'Sifão Espiritual',
+    description: 'Restaura vida a cada grupo de inimigos abatidos, exigindo menos abates conforme evolui.',
+    maxLevel: 5,
+    iconName: 'Ghost',
+    synergyWeapon: 'lamina_obsidiana',
+    levelDescriptions: Array.from({ length: 5 }, (_, index) => {
+      const level = index + 1;
+      return `Nv.${level}: recupera 2 HP a cada ${Math.max(18, 30 - (level - 1) * 3)} abates.`;
+    }),
+  },
+  veneno_ra_dardo: {
+    id: 'veneno_ra_dardo',
+    name: 'Veneno de Rã-Dardo',
+    description: 'Potencializa todo o dano de veneno causado pelas suas armas.',
+    maxLevel: 5,
+    iconName: 'Biohazard',
+    synergyWeapon: 'praga_noturna',
+    levelDescriptions: Array.from({ length: 5 }, (_, index) => {
+      const level = index + 1;
+      return `Nv.${level}: +${level * 8}% de dano de veneno.`;
+    }),
+  },
+  espinhos_vitoria: {
+    id: 'espinhos_vitoria',
+    name: 'Espinhos de Vitória-Régia',
+    description: 'Endurece a guarda e expande a área de ataque com espinhos aquáticos.',
+    maxLevel: 5,
+    iconName: 'Sprout',
+    synergyWeapon: 'pantano_devorador',
+    levelDescriptions: Array.from({ length: 5 }, (_, index) => {
+      const level = index + 1;
+      return `Nv.${level}: +${level} de Armadura e +${level * 5}% de Área de ataque.`;
+    }),
+  },
+  chama_boitata: {
+    id: 'chama_boitata',
+    name: 'Chama do Boitatá',
+    description: 'A fúria ígnea amplifica o dano contra inimigos debilitados por sangramento, veneno ou lentidão.',
+    maxLevel: 5,
+    iconName: 'Flame',
+    synergyWeapon: 'furia_carmesim',
+    levelDescriptions: Array.from({ length: 5 }, (_, index) => {
+      const level = index + 1;
+      return `Nv.${level}: +${level * 8}% de dano contra alvos debilitados.`;
+    }),
+  },
 };
 
 export interface FusionRecipe {
@@ -807,7 +921,7 @@ export interface FusionRecipe {
   iconName: string;
 }
 
-/** Five Supreme Fusions available only in the Amazon Forest at level 10/10. */
+/** Eight Supreme Fusions available only in the Amazon Forest when both parts are maxed. */
 export const FUSION_RECIPES: FusionRecipe[] = [
   {
     weaponId: 'garras_onca',
@@ -848,6 +962,30 @@ export const FUSION_RECIPES: FusionRecipe[] = [
     name: 'Injeção Letal',
     description: 'Ferrão de Formiga-Bala + Casco de Tartaruga: ferrões bioquímicos explosivos.',
     iconName: 'Syringe',
+  },
+  {
+    weaponId: 'morcegos_vampiros',
+    passiveId: 'veneno_ra_dardo',
+    resultId: 'praga_noturna',
+    name: 'Praga Noturna',
+    description: 'Enxame de Morcegos Vampiros + Veneno de Rã-Dardo: morcegos peçonhentos explodem curando 2 HP em área ao abater.',
+    iconName: 'Biohazard',
+  },
+  {
+    weaponId: 'raizes_sanguessugas',
+    passiveId: 'espinhos_vitoria',
+    resultId: 'pantano_devorador',
+    name: 'Pântano Devorador',
+    description: 'Raízes Sanguessugas + Espinhos de Vitória-Régia: raízes colossais que drenam e viram escudo com vida cheia.',
+    iconName: 'Sprout',
+  },
+  {
+    weaponId: 'lamina_obsidiana',
+    passiveId: 'chama_boitata',
+    resultId: 'furia_carmesim',
+    name: 'Fúria Carmesim',
+    description: 'Lâmina de Obsidiana + Chama do Boitatá: ondas de fogo sangrento que curam 1 HP por abate.',
+    iconName: 'Flame',
   },
 ];
 
