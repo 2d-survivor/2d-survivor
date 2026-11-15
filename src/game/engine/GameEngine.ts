@@ -315,6 +315,15 @@ const SUCURI_PREY: EnemyType[] = [
   'leafcutter_ant',
 ];
 
+// Derson's Special 1 — Entrega Expressa.
+const SPECIAL_1_COOLDOWN = 20;
+const SPECIAL_1_DASH_DURATION = 2.5;
+const SPECIAL_1_TRAIL_INTERVAL = 0.1;
+const SPECIAL_1_TRAIL_RADIUS = 48;
+const SPECIAL_1_TRAIL_DAMAGE = 4;
+const SPECIAL_1_TRAIL_DURATION = 3.2;
+const SPECIAL_1_PUSH_FORCE = 320;
+
 export class GameEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -330,6 +339,14 @@ export class GameEngine {
   public worldProps: WorldSystem;
   public vfx: VFXManager;
   public difficulty: DifficultyConfig;
+
+  private specialCooldown = 0;
+  private specialActiveTimer = 0;
+  private specialTrailTimer = 0;
+  private specialTrailId = 1;
+  private specialPrevX = 0;
+  private specialPrevY = 0;
+  private specialHitEnemies = new WeakSet<Enemy>();
 
   public enemies: Enemy[] = [];
   private readonly gorillaNpc: GorillaNpc | null;
@@ -626,6 +643,7 @@ export class GameEngine {
     this.isPaused = false;
     this.input.clearJump();
     this.input.clearInteract();
+    this.input.clearSpecial();
     this.lastTime = performance.now();
   }
 
@@ -729,7 +747,93 @@ export class GameEngine {
     this.animFrameId = requestAnimationFrame((time) => this.loop(time));
   }
 
+  private activateSpecial(slot: number): void {
+    if (slot !== 1 || this.player.character.id !== 'derson') return;
+    if (this.specialCooldown > 0 || this.specialActiveTimer > 0 || this.insideCave) return;
+
+    let dirX = this.input.dx;
+    let dirY = this.input.dy;
+    if (Math.hypot(dirX, dirY) <= 0.1) {
+      dirX = this.player.facingX;
+      dirY = this.player.facingY;
+    }
+    const magnitude = Math.hypot(dirX, dirY) || 1;
+    const nx = dirX / magnitude;
+    const ny = dirY / magnitude;
+
+    this.player.startSpecialDash(nx, ny, SPECIAL_1_DASH_DURATION);
+    this.specialCooldown = SPECIAL_1_COOLDOWN;
+    this.specialActiveTimer = SPECIAL_1_DASH_DURATION;
+    this.specialTrailTimer = 0;
+    this.specialPrevX = this.player.x;
+    this.specialPrevY = this.player.y;
+    this.specialHitEnemies = new WeakSet<Enemy>();
+  }
+
+  private updateSpecialAbility(dt: number): void {
+    if (this.specialCooldown > 0) {
+      this.specialCooldown = Math.max(0, this.specialCooldown - dt);
+    }
+    if (this.specialActiveTimer <= 0) return;
+
+    const currentX = this.player.x;
+    const currentY = this.player.y;
+    const segmentX = currentX - this.specialPrevX;
+    const segmentY = currentY - this.specialPrevY;
+    const segmentLengthSq = segmentX * segmentX + segmentY * segmentY;
+
+    for (let i = 0; i < this.enemies.length; i++) {
+      const enemy = this.enemies[i];
+      if (enemy.hp <= 0 || enemy.isSubmerged || enemy.isBoss || enemy.isElite) continue;
+      if (this.specialHitEnemies.has(enemy)) continue;
+
+      let t = segmentLengthSq > 0
+        ? ((enemy.x - this.specialPrevX) * segmentX + (enemy.y - this.specialPrevY) * segmentY) / segmentLengthSq
+        : 0;
+      t = Math.max(0, Math.min(1, t));
+      const closestX = this.specialPrevX + segmentX * t;
+      const closestY = this.specialPrevY + segmentY * t;
+      if (Math.hypot(enemy.x - closestX, enemy.y - closestY) > this.player.radius + enemy.radius + 12) {
+        continue;
+      }
+
+      const pushX = enemy.x - this.player.x;
+      const pushY = enemy.y - this.player.y;
+      const pushMagnitude = Math.hypot(pushX, pushY) || 1;
+      this.specialHitEnemies.add(enemy);
+      enemy.takeDamage(0, pushX / pushMagnitude, pushY / pushMagnitude, SPECIAL_1_PUSH_FORCE);
+      this.vfx.addSparks(enemy.x, enemy.y, '#f59e0b', 3);
+    }
+
+    this.specialTrailTimer -= dt;
+    while (this.specialTrailTimer <= 0) {
+      this.specialTrailTimer += SPECIAL_1_TRAIL_INTERVAL;
+      this.weaponSystem.groundZones.push({
+        id: -this.specialTrailId++,
+        type: 'coffee',
+        weaponId: 'derson_combo',
+        x: this.player.x,
+        y: this.player.y + this.player.radius * 0.35,
+        radius: SPECIAL_1_TRAIL_RADIUS,
+        tickDamage: SPECIAL_1_TRAIL_DAMAGE,
+        tickInterval: 0.35,
+        tickTimer: 0.05,
+        life: SPECIAL_1_TRAIL_DURATION,
+        maxLife: SPECIAL_1_TRAIL_DURATION,
+        isEvolved: false,
+      });
+    }
+
+    this.specialPrevX = currentX;
+    this.specialPrevY = currentY;
+    this.specialActiveTimer = Math.max(0, this.specialActiveTimer - dt);
+  }
+
   private update(dt: number): void {
+    const specialRequested = this.input.consumeSpecial();
+    if (specialRequested !== null) this.activateSpecial(specialRequested);
+    this.updateSpecialAbility(dt);
+
     this.tribeHunter?.update(dt);
     this.anacondaNpc?.update(dt);
     this.kopenawaNpc?.update(dt);
@@ -2973,6 +3077,23 @@ export class GameEngine {
         }
       : undefined;
 
+    const isDerson = this.player.character.id === 'derson';
+    const specialAbilities = [
+      {
+        key: '1',
+        name: isDerson ? 'Entrega Expressa' : undefined,
+        description: isDerson
+          ? 'Arrancada invulnerável de 2,5s que empurra inimigos e deixa um rastro de café fervente.'
+          : 'Especial exclusivo do Derson.',
+        cooldown: isDerson ? this.specialCooldown : 0,
+        cooldownMax: SPECIAL_1_COOLDOWN,
+        unlocked: isDerson,
+        active: isDerson && this.specialActiveTimer > 0,
+      },
+      { key: '2', cooldown: 0, cooldownMax: 0, unlocked: false, active: false },
+      { key: '3', cooldown: 0, cooldownMax: 0, unlocked: false, active: false },
+    ];
+
     this.callbacks.onHUDUpdate({
       hunterQuest: this.tribeHunter ? { ...this.hunterQuest } : undefined,
       hunterCanInteract: this.canTalkToHunter(),
@@ -2992,6 +3113,7 @@ export class GameEngine {
       activeBoss,
       eventAlert: this.waveDirector.eventAlert || undefined,
       objectives: this.buildObjectivesHUD(),
+      specialAbilities,
     });
   }
 

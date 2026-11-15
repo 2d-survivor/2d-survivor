@@ -299,6 +299,17 @@ export class Player {
     this.knockbackVY = velocityY;
   }
 
+  /** Derson's Entrega Expressa: a long, invulnerable dash in a fixed direction. */
+  public startSpecialDash(dirX: number, dirY: number, duration: number): void {
+    const magnitude = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
+    this.dashDirX = dirX / magnitude;
+    this.dashDirY = dirY / magnitude;
+    this.facingX = this.dashDirX;
+    this.facingY = this.dashDirY;
+    this.dashTimer = Math.max(this.dashTimer, duration);
+    this.invulnerableTimer = Math.max(this.invulnerableTimer, duration);
+  }
+
   update(dt: number, input: InputManager): boolean {
     // Simulation time keeps animation frozen whenever the engine is paused.
     this.idleAnimTimer = (this.idleAnimTimer + dt) % 4;

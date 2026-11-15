@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { HUDState } from '@/game/types';
+import { HUDState, SpecialAbilityHUD } from '@/game/types';
 import { HUNTER_FISH_TARGET } from '@/game/data/hunterQuest';
 import { renderWeaponIcon, renderPassiveIcon } from './GameIcons';
 import {
@@ -42,11 +42,16 @@ export const HUD: React.FC<HUDProps> = ({
   const hpPercent = Math.min(100, Math.max(0, (hud.playerHp / Math.max(1, hud.playerMaxHp)) * 100));
   const staminaPercent = Math.min(100, Math.max(0, (hud.stamina / Math.max(1, hud.maxStamina)) * 100));
   const objectives = hud.objectives;
+  const specialSlots: SpecialAbilityHUD[] = hud.specialAbilities ?? [
+    { key: '1', cooldown: 0, cooldownMax: 0, unlocked: false },
+    { key: '2', cooldown: 0, cooldownMax: 0, unlocked: false },
+    { key: '3', cooldown: 0, cooldownMax: 0, unlocked: false },
+  ];
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none flex flex-col justify-between p-3 font-sans text-white">
       {hud.hunterQuest?.accepted && !hud.hunterQuest.completed && (
-        <div role="status" className="absolute bottom-16 left-1/2 w-60 max-w-[72vw] -translate-x-1/2 rounded-xl border border-amber-600 bg-stone-950/95 px-4 py-3 text-amber-100 shadow-lg sm:bottom-6">
+        <div role="status" className="absolute bottom-28 left-1/2 w-60 max-w-[72vw] -translate-x-1/2 rounded-xl border border-amber-600 bg-stone-950/95 px-4 py-3 text-amber-100 shadow-lg sm:bottom-24">
           <div className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-2 text-sm font-bold"><Fish className="h-5 w-5 text-cyan-300" /> Peixes</span>
             <span className="font-mono text-xl font-black tabular-nums">{hud.hunterQuest.fish}/{HUNTER_FISH_TARGET}</span>
@@ -283,12 +288,68 @@ export const HUD: React.FC<HUDProps> = ({
         </div>
       </div>
 
-      {/* Bottom Hint for mobile/desktop */}
-      <div className="flex justify-between items-end text-[10px] text-slate-400/80">
-        <span className="hidden sm:inline">
-          WASD ou Setas para mover • SHIFT para dash • ESPAÇO para pular • ESC para pausar
-        </span>
-        <span className="sm:hidden">Arraste para mover (Joystick Virtual)</span>
+      {/* Bottom bar: three special ability slots */}
+      <div className="flex flex-col gap-1">
+        <div className="flex justify-center gap-2">
+          {specialSlots.map((slot, index) => {
+            const cooldownMax = Math.max(1, slot.cooldownMax);
+            const cooldown = Math.max(0, slot.cooldown);
+            const ready = slot.unlocked && cooldown <= 0;
+            const progress = slot.unlocked ? Math.max(0, Math.min(1, 1 - cooldown / cooldownMax)) : 0;
+
+            return (
+              <div
+                key={slot.key || index + 1}
+                title={slot.unlocked
+                  ? `${slot.name ?? 'Especial'}${slot.description ? ` — ${slot.description}` : ''}`
+                  : 'Slot bloqueado'}
+                className={`relative flex h-14 w-16 flex-col items-center justify-center rounded-lg border-2 bg-slate-950/85 shadow-lg backdrop-blur-sm ${
+                  slot.unlocked
+                    ? ready
+                      ? 'border-amber-400 shadow-amber-500/30'
+                      : 'border-slate-600'
+                    : 'border-slate-800 opacity-60'
+                }`}
+              >
+                <span className="absolute -left-1 -top-2 flex h-4 w-4 items-center justify-center rounded border border-slate-600 bg-slate-950 font-mono text-[9px] font-black text-slate-200">
+                  {slot.key || index + 1}
+                </span>
+                {slot.unlocked ? (
+                  <>
+                    <span className="text-lg leading-none">{slot.active ? '💨' : '☕'}</span>
+                    <span className="mt-0.5 max-w-[60px] truncate px-1 text-[8px] font-bold uppercase tracking-wide text-amber-200">
+                      {slot.name ?? 'Especial'}
+                    </span>
+                    <span className={`text-[9px] font-black ${ready ? 'text-emerald-300' : 'text-slate-300'}`}>
+                      {ready ? 'PRONTO' : `${Math.ceil(cooldown)}s`}
+                    </span>
+                    <span className="absolute inset-x-1 bottom-0.5 h-0.5 overflow-hidden rounded bg-slate-800">
+                      <span
+                        className="block h-full rounded bg-amber-400 transition-[width] duration-150 motion-reduce:transition-none"
+                        style={{ width: `${progress * 100}%` }}
+                      />
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-base leading-none">🔒</span>
+                    <span className="text-[8px] font-bold uppercase tracking-wide text-slate-500">
+                      Bloqueado
+                    </span>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Bottom Hint for mobile/desktop */}
+        <div className="flex justify-between items-end text-[10px] text-slate-400/80">
+          <span className="hidden sm:inline">
+            WASD ou Setas para mover • SHIFT para dash • ESPAÇO para pular • 1 para especial • ESC para pausar
+          </span>
+          <span className="sm:hidden">Arraste para mover (Joystick Virtual)</span>
+        </div>
       </div>
     </div>
   );

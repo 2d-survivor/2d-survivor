@@ -151,7 +151,7 @@ export interface RingPulseEffect {
 
 export interface GroundZoneEffect {
   id: number;
-  type: 'fire' | 'bio_cloud' | 'static_field';
+  type: 'fire' | 'bio_cloud' | 'static_field' | 'coffee';
   weaponId: WeaponId;
   x: number;
   y: number;
@@ -2985,6 +2985,29 @@ export class WeaponSystem {
         ctx.arc(screen.x, screen.y, z.radius, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+      } else if (z.type === 'coffee') {
+        const coffeeGrad = ctx.createRadialGradient(
+          screen.x,
+          screen.y,
+          z.radius * 0.1,
+          screen.x,
+          screen.y,
+          z.radius
+        );
+        coffeeGrad.addColorStop(0, 'rgba(120, 53, 15, 0.55)');
+        coffeeGrad.addColorStop(0.7, 'rgba(69, 26, 3, 0.4)');
+        coffeeGrad.addColorStop(1, 'rgba(41, 24, 12, 0)');
+        ctx.fillStyle = coffeeGrad;
+        ctx.strokeStyle = 'rgba(217, 119, 6, 0.75)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, z.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.35)';
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, z.radius * 0.4, 0, Math.PI * 2);
+        ctx.fill();
       } else {
         ctx.fillStyle = 'rgba(56, 189, 248, 0.18)';
         ctx.strokeStyle = 'rgba(253, 224, 71, 0.7)';

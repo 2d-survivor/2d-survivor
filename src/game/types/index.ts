@@ -328,6 +328,16 @@ export interface MissionObjectivesHUD {
   missions: MissionHUDItem[];
 }
 
+export interface SpecialAbilityHUD {
+  key: string;
+  name?: string;
+  description?: string;
+  cooldown: number;
+  cooldownMax: number;
+  unlocked: boolean;
+  active?: boolean;
+}
+
 export interface HUDState {
   hunterQuest?: HunterQuestProgress;
   hunterCanInteract?: boolean;
@@ -361,6 +371,7 @@ export interface HUDState {
   };
   eventAlert?: string;
   objectives?: MissionObjectivesHUD;
+  specialAbilities?: SpecialAbilityHUD[];
 }
 
 export interface GameEndSummary {
