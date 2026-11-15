@@ -568,6 +568,9 @@ export class GameEngine {
     this.lastTime = performance.now();
     this.sound.startBgm();
     this.sound.startAmazonAmbient();
+    // Publish the initial HUD as soon as the engine starts so the special slots
+    // (including Derson's Corte de Giro) do not stay locked until the next sync.
+    this.syncHUD();
     this.loop(this.lastTime);
   }
 
