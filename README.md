@@ -39,6 +39,7 @@ npm run bot:deploy   # registra os slash commands do Discord
 - `src/game/data/` — conteúdo data-driven: personagens, armas/passivas, mapas, dificuldades, missões e persistência.
 - `public/` — sprites, imagens e áudios.
 - `bot/` — bot de Discord e worker de implementações (documentação própria em [`bot/README.md`](bot/README.md)).
+- `CONTRIBUTORS.md` — lista de contribuidores do projeto.
 
 ## O jogo
 
@@ -57,3 +58,7 @@ npm install
 npm run deploy
 npm run dev
 ```
+
+## Contribuidores
+
+Veja a lista em [CONTRIBUTORS.md](CONTRIBUTORS.md).
