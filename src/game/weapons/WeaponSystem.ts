@@ -641,9 +641,10 @@ export class WeaponSystem {
     this.updateVineLashes(dt, player, targetableEnemies, spatialGrid, vfx, sound, onEnemyKilled);
 
     // 4. Update weapon cooldowns & trigger active firing
+    const cooldownStep = dt * (player.fullOrderTimer > 0 ? 2 : 1);
     this.weapons.forEach((weapon) => {
       if (weapon.id === 'bible') return;
-      weapon.cooldownTimer -= dt;
+      weapon.cooldownTimer -= cooldownStep;
       if (weapon.cooldownTimer <= 0) {
         this.fireWeapon(
           weapon,
@@ -2424,7 +2425,9 @@ export class WeaponSystem {
     if (w.evolved) {
       this.bibleIsActive = true;
     } else {
-      this.bibleCycleTimer -= dt;
+      this.bibleCycleTimer -= this.bibleIsActive
+        ? dt
+        : dt * (player.fullOrderTimer > 0 ? 2 : 1);
       if (this.bibleCycleTimer <= 0) {
         this.bibleIsActive = !this.bibleIsActive;
         if (this.bibleIsActive) {

@@ -206,6 +206,11 @@ const SPECIAL_1_PUSH_FORCE = 320;
 // Derson's Special 2 — Chuva de Pão de Queijo.
 const SPECIAL_2_COOLDOWN = 25;
 
+// Derson's Special 3 — Pedido Completo.
+const SPECIAL_3_COOLDOWN = 35;
+const SPECIAL_3_DURATION = 6;
+const SPECIAL_3_HEAL_FRACTION = 0.35;
+
 export class GameEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -224,6 +229,7 @@ export class GameEngine {
 
   private specialCooldown = 0;
   private special2Cooldown = 0;
+  private special3Cooldown = 0;
   private specialActiveTimer = 0;
   private specialTrailTimer = 0;
   private specialTrailId = 1;
@@ -646,6 +652,22 @@ export class GameEngine {
       return;
     }
 
+    if (slot === 3) {
+      if (this.special3Cooldown > 0) return;
+      this.special3Cooldown = SPECIAL_3_COOLDOWN;
+      const prevHp = this.player.hp;
+      this.player.heal(this.player.maxHp * SPECIAL_3_HEAL_FRACTION);
+      const healed = Math.round(this.player.hp - prevHp);
+      if (healed > 0) {
+        this.vfx.addDamageNumber(this.player.x, this.player.y, healed, false, true);
+      }
+      this.player.fullOrderTimer = Math.max(this.player.fullOrderTimer, SPECIAL_3_DURATION);
+      this.weaponSystem.spawnRingPulse(this.player.x, this.player.y, 120, '#34d399', 0.4);
+      this.vfx.addSparks(this.player.x, this.player.y, '#fbbf24', 18);
+      this.sound.playLevelUp();
+      return;
+    }
+
     if (slot !== 1) return;
     if (this.specialCooldown > 0 || this.specialActiveTimer > 0) return;
 
@@ -674,6 +696,9 @@ export class GameEngine {
     }
     if (this.special2Cooldown > 0) {
       this.special2Cooldown = Math.max(0, this.special2Cooldown - dt);
+    }
+    if (this.special3Cooldown > 0) {
+      this.special3Cooldown = Math.max(0, this.special3Cooldown - dt);
     }
     if (this.specialActiveTimer <= 0) return;
 
@@ -2887,7 +2912,17 @@ export class GameEngine {
         unlocked: isDerson,
         active: false,
       },
-      { key: '3', cooldown: 0, cooldownMax: 0, unlocked: false, active: false },
+      {
+        key: '3',
+        name: isDerson ? 'Pedido Completo' : undefined,
+        description: isDerson
+          ? 'Restaura instantaneamente 35% do HP máximo e dobra a velocidade de ataque e movimento por 6s.'
+          : 'Especial exclusivo do Derson.',
+        cooldown: isDerson ? this.special3Cooldown : 0,
+        cooldownMax: SPECIAL_3_COOLDOWN,
+        unlocked: isDerson,
+        active: isDerson && this.player.fullOrderTimer > 0,
+      },
     ];
 
     this.callbacks.onHUDUpdate({
