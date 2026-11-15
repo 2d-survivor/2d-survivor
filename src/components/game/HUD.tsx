@@ -308,7 +308,7 @@ export const HUD: React.FC<HUDProps> = ({
                         ? slot.active ? '💨' : '☕'
                         : slot.key === '2'
                           ? '🧀'
-                          : slot.active ? '⚡' : '🍽️'}
+                          : slot.active ? '🌀' : '🏍️'}
                     </span>
                     <span className="mt-0.5 max-w-[60px] truncate px-1 text-[8px] font-bold uppercase tracking-wide text-amber-200">
                       {slot.name ?? 'Especial'}

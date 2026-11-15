@@ -8,6 +8,10 @@ const HP_BAR_FONT_SIZE = 9;
 const HP_BAR_OUTLINE_WIDTH = 2.5;
 const HP_BAR_TEXT_PADDING_X = 3;
 
+// Mirrors SPECIAL_3_DURATION / SPECIAL_3_WAVE_INTERVAL in GameEngine.
+const SPIN_CUT_DURATION = 4;
+const SPIN_CUT_WAVE_INTERVAL = 0.5;
+
 export interface MovementConfig {
   maxStamina: number;
   dashStaminaCost: number;
@@ -102,7 +106,8 @@ export class Player {
   public knockbackVX: number = 0;
   public knockbackVY: number = 0;
   public attackSpeedBoostTimer: number = 0;
-  public fullOrderTimer: number = 0;
+  // Derson's Corte de Giro: spinning sound-wave attack window.
+  public spinCutTimer: number = 0;
   public shieldTimer: number = 0;
   public companionShield: number = 0;
   public companionSpeedBonus: number = 0;
@@ -372,8 +377,8 @@ export class Player {
       this.attackSpeedBoostTimer = Math.max(0, this.attackSpeedBoostTimer - dt);
     }
 
-    if (this.fullOrderTimer > 0) {
-      this.fullOrderTimer = Math.max(0, this.fullOrderTimer - dt);
+    if (this.spinCutTimer > 0) {
+      this.spinCutTimer = Math.max(0, this.spinCutTimer - dt);
     }
 
     if (this.shieldTimer > 0) {
@@ -473,10 +478,10 @@ export class Player {
 
     const dashing = this.dashTimer > 0;
     const speedBoost = this.speedBoostTimer > 0 ? 1.15 : 1;
-    const fullOrderSpeedBoost = this.fullOrderTimer > 0 ? 2 : 1;
+    const spinCutSpeedBoost = this.spinCutTimer > 0 ? 1.4 : 1;
     const slowMult = this.slowTimer > 0 ? Math.max(0.35, 1 - this.slowFactor) : 1;
     const effectiveSpeed =
-      this.speed * speedBoost * fullOrderSpeedBoost * slowMult * this.terrainSpeedMultiplier;
+      this.speed * speedBoost * spinCutSpeedBoost * slowMult * this.terrainSpeedMultiplier;
 
     let moveX = moving ? dx * effectiveSpeed * dt : 0;
     let moveY = moving ? dy * effectiveSpeed * dt : 0;
@@ -929,15 +934,19 @@ export class Player {
       ctx.restore();
     }
 
-    // Derson's Pedido Completo overdrive aura.
-    if (this.fullOrderTimer > 0) {
-      const pulse = 0.55 + Math.sin(this.idleAnimTimer * Math.PI * 4) * 0.25;
+    // Derson's Corte de Giro: expanding sound rings around the motorcycle.
+    if (this.spinCutTimer > 0) {
+      const elapsed = SPIN_CUT_DURATION - this.spinCutTimer;
       ctx.save();
-      ctx.strokeStyle = `rgba(251, 191, 36, ${pulse.toFixed(2)})`;
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.arc(screen.x, screen.y - 6, 33, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.lineWidth = 2;
+      for (let ring = 0; ring < 3; ring++) {
+        const phase = (elapsed / SPIN_CUT_WAVE_INTERVAL + ring / 3) % 1;
+        const radius = 22 + phase * 78;
+        ctx.strokeStyle = `rgba(125, 211, 252, ${((1 - phase) * 0.7).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y - 6, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.restore();
     }
 

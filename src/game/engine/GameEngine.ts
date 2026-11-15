@@ -225,10 +225,13 @@ const SPECIAL_1_PUSH_FORCE = 320;
 // Derson's Special 2 — Chuva de Pão de Queijo.
 const SPECIAL_2_COOLDOWN = 25;
 
-// Derson's Special 3 — Pedido Completo.
-const SPECIAL_3_COOLDOWN = 35;
-const SPECIAL_3_DURATION = 6;
-const SPECIAL_3_HEAL_FRACTION = 0.35;
+// Derson's Special 3 — Corte de Giro.
+const SPECIAL_3_COOLDOWN = 30;
+const SPECIAL_3_DURATION = 4;
+const SPECIAL_3_WAVE_INTERVAL = 0.5;
+const SPECIAL_3_WAVE_RADIUS = 150;
+const SPECIAL_3_WAVE_DAMAGE = 16;
+const SPECIAL_3_PUSH_FORCE = 180;
 
 export class GameEngine {
   private canvas: HTMLCanvasElement;
@@ -249,6 +252,7 @@ export class GameEngine {
   private specialCooldown = 0;
   private special2Cooldown = 0;
   private special3Cooldown = 0;
+  private special3WaveTimer = 0;
   private specialActiveTimer = 0;
   private specialTrailTimer = 0;
   private specialTrailId = 1;
@@ -697,16 +701,11 @@ export class GameEngine {
     if (slot === 3) {
       if (this.special3Cooldown > 0) return;
       this.special3Cooldown = SPECIAL_3_COOLDOWN;
-      const prevHp = this.player.hp;
-      this.player.heal(this.player.maxHp * SPECIAL_3_HEAL_FRACTION);
-      const healed = Math.round(this.player.hp - prevHp);
-      if (healed > 0) {
-        this.vfx.addDamageNumber(this.player.x, this.player.y, healed, false, true);
-      }
-      this.player.fullOrderTimer = Math.max(this.player.fullOrderTimer, SPECIAL_3_DURATION);
-      this.weaponSystem.spawnRingPulse(this.player.x, this.player.y, 120, '#34d399', 0.4);
-      this.vfx.addSparks(this.player.x, this.player.y, '#fbbf24', 18);
-      this.sound.playLevelUp();
+      this.player.spinCutTimer = Math.max(this.player.spinCutTimer, SPECIAL_3_DURATION);
+      this.special3WaveTimer = 0;
+      this.vfx.addSparks(this.player.x, this.player.y, '#7dd3fc', 18);
+      this.sound.playSlash();
+      this.camera.shake(0.18, 5);
       return;
     }
 
@@ -732,6 +731,35 @@ export class GameEngine {
     this.specialHitEnemies = new WeakSet<Enemy>();
   }
 
+  /** Corte de Giro: one expanding sound wave that damages and shoves enemies. */
+  private emitSpinCutWave(): void {
+    const radius = SPECIAL_3_WAVE_RADIUS * this.player.areaMultiplier;
+    const damage = Math.max(1, Math.round(SPECIAL_3_WAVE_DAMAGE * this.player.might));
+    this.weaponSystem.spawnRingPulse(this.player.x, this.player.y, radius, '#7dd3fc', 0.45);
+
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const enemy = this.enemies[i];
+      if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+      const dx = enemy.x - this.player.x;
+      const dy = enemy.y - this.player.y;
+      if (dx * dx + dy * dy > radius * radius) continue;
+
+      const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+      const dealt = enemy.computeDamageTaken(damage, this.player.debuffDamageBonus);
+      const dead = enemy.takeDamage(
+        dealt,
+        dx / dist,
+        dy / dist,
+        SPECIAL_3_PUSH_FORCE
+      );
+      this.vfx.addDamageNumber(enemy.x, enemy.y - 6, dealt, false);
+      if (dead) {
+        this.onEnemyKilled(enemy);
+        this.enemies.splice(i, 1);
+      }
+    }
+  }
+
   private updateSpecialAbility(dt: number): void {
     if (this.specialCooldown > 0) {
       this.specialCooldown = Math.max(0, this.specialCooldown - dt);
@@ -741,6 +769,15 @@ export class GameEngine {
     }
     if (this.special3Cooldown > 0) {
       this.special3Cooldown = Math.max(0, this.special3Cooldown - dt);
+    }
+    if (this.player.spinCutTimer > 0) {
+      this.special3WaveTimer -= dt;
+      while (this.special3WaveTimer <= 0) {
+        this.special3WaveTimer += SPECIAL_3_WAVE_INTERVAL;
+        this.emitSpinCutWave();
+      }
+    } else {
+      this.special3WaveTimer = 0;
     }
     if (this.specialActiveTimer <= 0) return;
 
@@ -3420,14 +3457,14 @@ export class GameEngine {
       },
       {
         key: '3',
-        name: isDerson ? 'Pedido Completo' : undefined,
+        name: isDerson ? 'Corte de Giro' : undefined,
         description: isDerson
-          ? 'Restaura instantaneamente 35% do HP máximo e dobra a velocidade de ataque e movimento por 6s.'
+          ? 'Acelera a moto ao limite e gira por 4s, emitindo anéis sonoros a cada 0,5s que causam dano em área e afastam inimigos.'
           : 'Especial exclusivo do Derson.',
         cooldown: isDerson ? this.special3Cooldown : 0,
         cooldownMax: SPECIAL_3_COOLDOWN,
         unlocked: isDerson,
-        active: isDerson && this.player.fullOrderTimer > 0,
+        active: isDerson && this.player.spinCutTimer > 0,
       },
     ];
 
