@@ -1,6 +1,7 @@
 'use client';
+import { CharacterLoadoutScreen } from './CharacterLoadoutScreen';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAudioSettings, updateAudioSettings } from './useAudioSettings';
 import Image from 'next/image';
 import { CharacterAtlasPortrait } from './CharacterAtlasPortrait';
@@ -11,7 +12,6 @@ import { DIFFICULTIES, getDifficulty } from '@/game/data/difficulties';
 import { DEFAULT_MAP_ID, GAME_MAPS } from '@/game/data/maps';
 import { countClaimableMissions, getAccountLevel } from '@/game/data/missions';
 import { WEAPON_REGISTRY } from '@/game/data/upgrades';
-import { EquipmentModal } from './EquipmentModal';
 import { MissionsTab } from './MissionsTab';
 import { HeroStatusTab } from './HeroStatusTab';
 import { AmazonGuideModal } from './AmazonGuideModal';
@@ -93,13 +93,30 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
     savedData.difficulty ?? 'normal'
   );
   const [selectedMap, setSelectedMap] = useState<MapId>(DEFAULT_MAP_ID);
-  const [isEquipmentOpen, setIsEquipmentOpen] = useState(false);
+  const [isLoadoutOpen, setIsLoadoutOpen] = useState(false);
   const [isAmazonGuideOpen, setIsAmazonGuideOpen] = useState(false);
   const { selectionVolume } = useAudioSettings();
   const [isSelectionMusicPlaying, setIsSelectionMusicPlaying] = useState(false);
   const selectionAudioRef = useRef<HTMLAudioElement | null>(null);
 
+  const menuScrollRef = useRef<HTMLDivElement>(null);
+  const equipmentButtons = useRef<Record<string, HTMLButtonElement | null>>({});
+  const rosterScrollTop = useRef(0);
+  const returningToHero = useRef<string | null>(null);
   const selectedChar = CHARACTERS[selectedCharIndex];
+  const closeLoadout = useCallback(() => {
+    returningToHero.current = CHARACTERS[selectedCharIndex].id;
+    setIsLoadoutOpen(false);
+  }, [selectedCharIndex]);
+  useEffect(() => {
+    if (isLoadoutOpen) {
+      menuScrollRef.current?.scrollTo({ top: 0 });
+    } else if (returningToHero.current) {
+      equipmentButtons.current[returningToHero.current]?.focus({ preventScroll: true });
+      if (menuScrollRef.current) menuScrollRef.current.scrollTop = rosterScrollTop.current;
+      returningToHero.current = null;
+    }
+  }, [isLoadoutOpen]);
   useEffect(() => {
     if (selectionAudioRef.current) {
       selectionAudioRef.current.volume = getSelectionMusicVolume(selectedChar.id, selectionVolume);
@@ -207,7 +224,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
   };
 
   return (
-    <div className="dungeon-bg font-ui fixed inset-0 z-40 flex items-center justify-center overflow-y-auto p-3 select-none sm:p-5">
+    <div ref={menuScrollRef} className="dungeon-bg font-ui fixed inset-0 z-40 flex items-center justify-center overflow-y-auto p-3 select-none sm:p-5">
       <div aria-hidden="true" className="torch-glow torch-glow-left" />
       <div aria-hidden="true" className="torch-glow torch-glow-right" />
       <div aria-hidden="true" className="dungeon-web dungeon-web-tl" />
@@ -259,6 +276,9 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
           </div>
         </div>
 
+        {isLoadoutOpen ? (
+          <CharacterLoadoutScreen key={selectedChar.id} character={selectedChar} savedData={savedData} onUpdateSave={onUpdateSave} onBack={closeLoadout} />
+        ) : <>
         {/* Desktop: map/difficulty on the left, roster/shop/missions on the right */}
         <div className="grid w-full grid-cols-1 gap-3 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
           {/* Left column: Map + Difficulty */}
@@ -446,15 +466,19 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
                   ? WEAPON_REGISTRY[char.startingWeapon]
                   : undefined;
                 return (
-                  <button
-                    key={char.id}
-                    onClick={() => {
-                      handleSelectCharacter(index);
-                      setIsEquipmentOpen(true);
-                    }}
-                    aria-label={`Selecionar ${char.name} e abrir equipamento`}
-                    className={`char-card ${isSelected ? 'char-card-active' : ''}`}
-                  >
+                  <article key={char.id} className={`char-card relative ${isSelected ? 'char-card-active' : ''}`}>
+                    <button type="button" ref={element => { equipmentButtons.current[char.id] = element; }}
+                      onClick={() => {
+                        rosterScrollTop.current = menuScrollRef.current?.scrollTop ?? 0;
+                        if (selectedCharIndex !== index) handleSelectCharacter(index);
+                        setIsLoadoutOpen(true);
+                      }}
+                      aria-label={`Equipamentos de ${char.name}`}
+                      className="absolute right-2 top-2 z-10 cursor-pointer rounded border border-[#7c663b] bg-[#262a20] px-2 py-1.5 text-[10px] font-bold text-[#e3bf78] hover:border-amber-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200">
+                      Equipamentos
+                    </button>
+                    <button type="button" onClick={() => handleSelectCharacter(index)} aria-pressed={isSelected}
+                      aria-label={`Selecionar ${char.name}`} className="flex w-full flex-1 cursor-pointer flex-col justify-between gap-2 pt-7 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-amber-200">
                     <div>
                       {/* Character avatar with icon */}
                       <div
@@ -512,12 +536,14 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
                         )}
                       </div>
                     </div>
-                  </button>
+                    </button>
+                  </article>
                 );
               })}
             </div>
           </div>
         )}
+
 
         {/* TAB 2: Power-Ups Meta Shop */}
         {activeTab === 'shop' && (
@@ -602,12 +628,9 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
             mouse ou toque para mover
           </span>
         </div>
+        </>}
       </div>
 
-      {isEquipmentOpen && (
-        <EquipmentModal character={selectedChar} savedData={savedData} onUpdateSave={onUpdateSave}
-          onClose={() => setIsEquipmentOpen(false)} />
-      )}
       {isAmazonGuideOpen && <AmazonGuideModal onClose={() => setIsAmazonGuideOpen(false)} />}
     </div>
   );

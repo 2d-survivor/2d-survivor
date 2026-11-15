@@ -63,6 +63,7 @@ export interface Projectile {
   bleedDuration?: number;
   slowFactor?: number;
   slowDuration?: number;
+  stunDuration?: number;
   poisonDps?: number;
   poisonDuration?: number;
   poisonContagious?: boolean;
@@ -165,7 +166,7 @@ export interface ArcSlashEffect {
 
 export interface GroundZoneEffect {
   id: number;
-  type: 'fire' | 'bio_cloud' | 'static_field' | 'blood_roots';
+  type: 'fire' | 'bio_cloud' | 'static_field' | 'coffee' | 'blood_roots';
   weaponId: WeaponId;
   x: number;
   y: number;
@@ -235,6 +236,7 @@ const AMAZON_WEAPON_IDS: WeaponId[] = [
 ];
 
 const AMAZON_PASSIVE_IDS: PassiveId[] = [
+  ...ALL_PASSIVE_IDS,
   'casco_tartaruga',
   'energia_guarana',
   'raiz_ginseng',
@@ -271,7 +273,6 @@ export class WeaponSystem {
   private lifestealHealedInWindow: number = 0;
   private siphonKillCount: number = 0;
   private vineLashes: VineLashAttack[] = [];
-  private vineVariantIndex = 0;
 
   public clearVineLashes(): void { this.vineLashes = []; }
   public lightningStrikes: LightningStrikeEffect[] = [];
@@ -497,7 +498,7 @@ export class WeaponSystem {
     player.pickupRadius = 65 + (b.pickupRadius || 0);
     player.xpMultiplier = 1.0 + (b.xpMultiplier || 0);
     player.goldMultiplier = 1.0 + (perm.greed || 0) * 0.15;
-    player.speed = player.baseSpeed * (1 + player.objectiveSpeedBonus + player.lulaLevelMovementBonus);
+    player.speed = player.baseSpeed * (1 + player.objectiveSpeedBonus + player.lulaLevelMovementBonus + player.companionSpeedBonus);
 
     // Apply all base passives
     const spinach = this.passives.get('spinach');
@@ -607,6 +608,40 @@ export class WeaponSystem {
     this.ringPulses.push({ x, y, radius, color, life: duration, maxLife: duration });
   }
 
+  /** Derson's Special 2: twenty explosive cheese breads fired in every direction. */
+  public spawnCheeseBreadRain(player: Player): void {
+    const count = 20;
+    const speed = 340;
+    const life = 1.15;
+    const baseAngle = Math.random() * Math.PI * 2;
+    const spawnDistance = player.radius + 12;
+
+    for (let i = 0; i < count; i++) {
+      const angle = baseAngle + (i / count) * Math.PI * 2;
+      this.projectiles.push({
+        id: this.nextProjId++,
+        type: 'cheese_bread',
+        x: player.x + Math.cos(angle) * spawnDistance,
+        y: player.y + Math.sin(angle) * spawnDistance,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        radius: 10 * player.areaMultiplier,
+        damage: 26 * player.might,
+        pierce: 1,
+        knockForce: 340,
+        explosionRadius: 72 * player.areaMultiplier,
+        stunDuration: 1.4,
+        life,
+        maxLife: life,
+        weaponId: 'derson_combo',
+        isEvolved: false,
+        hitEnemyIds: new Set(),
+        spinAngle: angle,
+        spinSpeed: 9,
+      });
+    }
+  }
+
   update(
     dt: number,
     player: Player,
@@ -668,9 +703,10 @@ export class WeaponSystem {
     this.updateVineLashes(dt, player, targetableEnemies, spatialGrid, vfx, sound, onEnemyKilled);
 
     // 4. Update weapon cooldowns & trigger active firing
+    const cooldownStep = dt * (player.fullOrderTimer > 0 ? 2 : 1);
     this.weapons.forEach((weapon) => {
       if (weapon.id === 'bible') return;
-      weapon.cooldownTimer -= dt;
+      weapon.cooldownTimer -= cooldownStep;
       if (weapon.cooldownTimer <= 0) {
         this.fireWeapon(
           weapon,
@@ -1010,7 +1046,7 @@ export class WeaponSystem {
       }
       case 'chicotada_cipo': {
         w.cooldownTimer = Math.max(0.74, 1.15 - w.level * 0.035) * cdFactor;
-        this.triggerVineLash(w, player, grid);
+        this.triggerVineLash(w, player);
         break;
       }
       case 'enxame_mutuca': {
@@ -1104,9 +1140,9 @@ export class WeaponSystem {
       const angle = target
         ? Math.atan2(target.y - player.y, target.x - player.x)
         : (nearby[0]
-            ? Math.atan2(nearby[0].y - player.y, nearby[0].x - player.x)
-            : fallbackAngle) +
-          (i - (projectileCount - 1) / 2) * 0.14;
+          ? Math.atan2(nearby[0].y - player.y, nearby[0].x - player.x)
+          : fallbackAngle) +
+        (i - (projectileCount - 1) / 2) * 0.14;
 
       this.projectiles.push({
         id: this.nextProjId++,
@@ -2063,19 +2099,14 @@ export class WeaponSystem {
     }
   }
 
-  private triggerVineLash(w: WeaponInstance, player: Player, grid: SpatialGrid<Enemy>): void {
+  private triggerVineLash(w: WeaponInstance, player: Player): void {
     const reach = (220 + 14 * w.level) * player.areaMultiplier;
-    const targets = grid.queryRadius(player.x, player.y, reach)
-      .filter(enemy => enemy.hp > 0 && !enemy.isSubmerged)
-      .sort((a, b) => (a.x - player.x) ** 2 + (a.y - player.y) ** 2 -
-        ((b.x - player.x) ** 2 + (b.y - player.y) ** 2));
-    const target = targets[0];
-    const dx = target ? target.x - player.x : player.facingX;
-    const dy = target ? target.y - player.y : player.facingY;
-    const angle = Math.hypot(dx, dy) > 0.001 ? Math.atan2(dy, dx) : Math.atan2(player.facingY, player.facingX);
+    // Match the sprite's facing side and always sweep from the upper to lower edge.
+    const facingLeft = player.facingX < 0;
+    const angle = facingLeft ? Math.PI : 0;
     this.vineLashes.push({
       weapon: w, x: player.x, y: player.y, angle, elapsed: 0, reach,
-      variant: (['clockwise', 'counterclockwise', 'wave'] as const)[this.vineVariantIndex++ % 3],
+      variant: facingLeft ? 'counterclockwise' : 'clockwise',
       area: player.areaMultiplier, damage: (22 + 6 * w.level) * player.might,
       slowDuration: 0.8 * player.durationMultiplier, hitEnemyIds: new Set(),
     });
@@ -2780,7 +2811,9 @@ export class WeaponSystem {
     if (w.evolved) {
       this.bibleIsActive = true;
     } else {
-      this.bibleCycleTimer -= dt;
+      this.bibleCycleTimer -= this.bibleIsActive
+        ? dt
+        : dt * (player.fullOrderTimer > 0 ? 2 : 1);
       if (this.bibleCycleTimer <= 0) {
         this.bibleIsActive = !this.bibleIsActive;
         if (this.bibleIsActive) {
@@ -2931,7 +2964,9 @@ export class WeaponSystem {
     player: Player,
     grid: SpatialGrid<Enemy>,
     vfx: VFXManager,
-    onEnemyKilled: (enemy: Enemy) => void
+    onEnemyKilled: (enemy: Enemy) => void,
+    stunDuration: number = 0,
+    pushForce: number = 70
   ): void {
     this.spawnRingPulse(x, y, radius, color, 0.24);
     vfx.addSparks(x, y, color, 5);
@@ -2947,11 +2982,12 @@ export class WeaponSystem {
         player,
         Math.cos(ang),
         Math.sin(ang),
-        70,
+        pushForce,
         grid,
         vfx,
         onEnemyKilled
       );
+      if (stunDuration > 0 && vic.hp > 0) vic.applyStun(stunDuration);
     }
   }
 
@@ -3143,6 +3179,22 @@ export class WeaponSystem {
       }
 
       if (p.life <= 0) {
+        if (p.explosionRadius && p.stunDuration) {
+          this.triggerSplashExplosion(
+            this.weapons.get(p.weaponId),
+            p.x,
+            p.y,
+            p.explosionRadius,
+            p.damage * 0.65,
+            '#facc15',
+            player,
+            grid,
+            vfx,
+            onEnemyKilled,
+            p.stunDuration,
+            p.knockForce ?? 70
+          );
+        }
         this.projectiles.splice(i, 1);
         continue;
       }
@@ -3233,7 +3285,22 @@ export class WeaponSystem {
         // Splash / Shockwave triggers
         p.pierceCountSoFar = (p.pierceCountSoFar || 0) + 1;
         if (p.explosionRadius && p.explosionRadius > 0) {
-          if (p.type === 'bow') {
+          if (p.stunDuration) {
+            this.triggerSplashExplosion(
+              w,
+              enemy.x,
+              enemy.y,
+              p.explosionRadius,
+              p.damage * 0.65,
+              '#facc15',
+              player,
+              grid,
+              vfx,
+              onEnemyKilled,
+              p.stunDuration,
+              p.knockForce ?? 70
+            );
+          } else if (p.type === 'bow') {
             if (enemy.isElite || enemy.isBoss || p.pierceCountSoFar % 3 === 1) {
               this.triggerSplashExplosion(
                 w,
@@ -3304,45 +3371,45 @@ export class WeaponSystem {
         const sparkColor =
           p.type === 'bow'
             ? '#a3e635'
-              : p.type === 'cheese_bread'
-                ? '#facc15'
-                : p.type === 'coffee'
-                  ? '#b45309'
-                  : p.type === 'cake'
-                    ? '#f9a8d4'
-                    : p.type === 'syringe'
-                      ? '#22d3ee'
-                      : p.type === 'flying_tray'
-                        ? '#fbbf24'
-                        : p.type === 'executioner_axe'
-                          ? '#f43f5e'
-                          : p.type === 'jaguar_claw'
-                            ? '#f97316'
-                            : p.type === 'pupunha_spike'
-                              ? '#facc15'
-                              : p.type === 'bullet_sting'
-                                ? '#22c55e'
-                                : p.type === 'saci_cyclone'
-                                  ? '#a16207'
-                                  : p.type === 'caipora_spear'
-                                    ? '#84cc16'
-                                    : p.type === 'piranha_bite'
-                                      ? '#dc2626'
-                                      : p.type === 'vine_lash'
-                                        ? '#22c55e'
-                                        : p.type === 'mutuca'
-                                          ? '#94a3b8'
-                                          : p.type === 'tucano'
-                                            ? '#f59e0b'
-                                            : p.type === 'spider_web'
-                                              ? '#e2e8f0'
-                                              : p.type === 'sucuri'
-                                                ? '#166534'
-                                                : p.type === 'vampire_bat'
-                                                  ? '#a855f7'
-                                                  : p.type === 'blood_fire_wave'
-                                                    ? '#f97316'
-                                                    : '#e2e8f0';
+            : p.type === 'cheese_bread'
+              ? '#facc15'
+              : p.type === 'coffee'
+                ? '#b45309'
+                : p.type === 'cake'
+                  ? '#f9a8d4'
+                  : p.type === 'syringe'
+                    ? '#22d3ee'
+                    : p.type === 'flying_tray'
+                      ? '#fbbf24'
+                      : p.type === 'executioner_axe'
+                        ? '#f43f5e'
+                        : p.type === 'jaguar_claw'
+                          ? '#f97316'
+                          : p.type === 'pupunha_spike'
+                            ? '#facc15'
+                            : p.type === 'bullet_sting'
+                              ? '#22c55e'
+                              : p.type === 'saci_cyclone'
+                                ? '#a16207'
+                                : p.type === 'caipora_spear'
+                                  ? '#84cc16'
+                                  : p.type === 'piranha_bite'
+                                    ? '#dc2626'
+                                    : p.type === 'vine_lash'
+                                      ? '#22c55e'
+                                      : p.type === 'mutuca'
+                                        ? '#94a3b8'
+                                        : p.type === 'tucano'
+                                          ? '#f59e0b'
+                                          : p.type === 'spider_web'
+                                            ? '#e2e8f0'
+                                            : p.type === 'sucuri'
+                                              ? '#166534'
+                                              : p.type === 'vampire_bat'
+                                                ? '#a855f7'
+                                                : p.type === 'blood_fire_wave'
+                                                  ? '#f97316'
+                                                  : '#e2e8f0';
         vfx.addSparks(p.x, p.y, sparkColor, 3);
         if ((p.type === 'bow' && !enemy.isSubmerged) && p.weaponId === player.character.startingWeapon) sound.playBowHit();
 
@@ -3404,6 +3471,29 @@ export class WeaponSystem {
         ctx.arc(screen.x, screen.y, z.radius, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+      } else if (z.type === 'coffee') {
+        const coffeeGrad = ctx.createRadialGradient(
+          screen.x,
+          screen.y,
+          z.radius * 0.1,
+          screen.x,
+          screen.y,
+          z.radius
+        );
+        coffeeGrad.addColorStop(0, 'rgba(120, 53, 15, 0.55)');
+        coffeeGrad.addColorStop(0.7, 'rgba(69, 26, 3, 0.4)');
+        coffeeGrad.addColorStop(1, 'rgba(41, 24, 12, 0)');
+        ctx.fillStyle = coffeeGrad;
+        ctx.strokeStyle = 'rgba(217, 119, 6, 0.75)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, z.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.35)';
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, z.radius * 0.4, 0, Math.PI * 2);
+        ctx.fill();
       } else if (z.type === 'blood_roots') {
         const gradient = ctx.createRadialGradient(
           screen.x,

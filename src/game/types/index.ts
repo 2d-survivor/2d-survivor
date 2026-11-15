@@ -245,7 +245,9 @@ export type EquipmentSlot = 'armor' | 'boots' | 'gloves' | 'helmet' | 'weapon';
 export type EquipmentStats = Partial<Record<'maxHp' | 'armor' | 'might' | 'speed' | 'recovery' | 'critChance' | 'attackSpeed' | 'bonusAmount' | 'damageReduction' | 'projectileSpeed', number>>;
 export interface HunterQuestProgress { accepted: boolean; fish: number; completed: boolean; }
 export interface EquipmentItem { id: string; name: string; slot: EquipmentSlot; stats: EquipmentStats; }
-export interface CharacterInventory { items: EquipmentItem[]; equipped: Partial<Record<EquipmentSlot, string>>; kopenawaDefeated?: boolean; hunterQuest?: HunterQuestProgress; }
+export type CompanionId = 'frog' | 'turtle' | 'butterfly';
+export type ForestMissionStatus = 'available' | 'accepted' | 'ready' | 'delivered' | 'expired';
+export interface CharacterInventory { unlockedCompanions?: CompanionId[]; equippedCompanions?: CompanionId[]; items: EquipmentItem[]; equipped: Partial<Record<EquipmentSlot, string>>; kopenawaDefeated?: boolean; hunterQuest?: HunterQuestProgress; }
 
 export interface SavedGameData {
   inventories: Record<string, CharacterInventory>;
@@ -346,12 +348,28 @@ export interface MissionHUDItem {
 }
 
 export interface MissionObjectivesHUD {
+  status: ForestMissionStatus;
+  endTime: number;
+  reward: CompanionId;
+  rewardUnlocked: boolean;
   turn: 1 | 2 | 3;
   turnLabel: string;
   missions: MissionHUDItem[];
 }
 
+export interface SpecialAbilityHUD {
+  key: string;
+  name?: string;
+  description?: string;
+  cooldown: number;
+  cooldownMax: number;
+  unlocked: boolean;
+  active?: boolean;
+}
+
 export interface HUDState {
+  companions?: CompanionId[];
+  companionShield?: number;
   hunterQuest?: HunterQuestProgress;
   hunterCanInteract?: boolean;
   mapId?: MapId;
@@ -395,6 +413,7 @@ export interface HUDState {
   };
   eventAlert?: string;
   objectives?: MissionObjectivesHUD;
+  specialAbilities?: SpecialAbilityHUD[];
 }
 
 export interface GameEndSummary {

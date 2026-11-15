@@ -1,7 +1,7 @@
 'use client';
 
 import { CharacterConfig, EquipmentSlot, EquipmentStats, SavedGameData } from '@/game/types';
-import { emptyInventory, EQUIPMENT_SLOTS, formatEquipmentStat, getEquipmentBonuses } from '@/game/data/inventory';
+import { emptyInventory, equipInventoryItem, EQUIPMENT_SLOTS, formatEquipmentStat, getEquipmentBonuses } from '@/game/data/inventory';
 import { saveGameData } from '@/game/data/persistence';
 import Image from 'next/image';
 import { equipmentArtwork } from '@/game/data/inventory';
@@ -19,11 +19,9 @@ export function InventoryTab({ character, savedData, onUpdateSave, slotFilter }:
   const bonuses = getEquipmentBonuses(inventory);
   const items = inventory.items.filter(item => !slotFilter || item.slot === slotFilter);
   const changeEquipment = (slot: EquipmentSlot, itemId?: string) => {
-    if (itemId && !inventory.items.some((item) => item.id === itemId && item.slot === slot)) return;
-    const equipped = { ...inventory.equipped };
-    if (itemId) equipped[slot] = itemId;
-    else delete equipped[slot];
-    const next: SavedGameData = { ...savedData, inventories: { ...savedData.inventories, [character.id]: { ...inventory, equipped } } };
+    const nextInventory = equipInventoryItem(inventory, slot, itemId);
+    if (nextInventory === inventory) return;
+    const next: SavedGameData = { ...savedData, inventories: { ...savedData.inventories, [character.id]: nextInventory } };
     saveGameData(next);
     onUpdateSave(next);
   };

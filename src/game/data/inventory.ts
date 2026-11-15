@@ -1,3 +1,4 @@
+import { normalizeCompanions } from './companions';
 import { CharacterConfig, CharacterInventory, EquipmentItem, EquipmentSlot, EquipmentStats } from '../types';
 import { getHunterQuest, TRIBE_HEADDRESS } from './hunterQuest';
 
@@ -41,6 +42,7 @@ export function normalizeInventories(value: unknown): Record<string, CharacterIn
   return Object.fromEntries(Object.entries(value).filter(([, data]) => isRecord(data)).map(([id, data]) => {
     const inventory = emptyInventory();
     const source = data as Record<string, unknown>;
+    Object.assign(inventory, normalizeCompanions(source.unlockedCompanions, source.equippedCompanions));
     inventory.kopenawaDefeated = source.kopenawaDefeated === true;
     for (const item of Array.isArray(source.items) ? source.items : []) {
       if (!isRecord(item) || typeof item.id !== 'string' || !item.id ||
@@ -73,6 +75,16 @@ export function getEquipmentBonuses(inventory: CharacterInventory): EquipmentSta
     for (const key of Object.keys(EQUIPMENT_STATS) as (keyof EquipmentStats)[]) total[key] = (total[key] ?? 0) + (item.stats[key] ?? 0);
   }
   return total;
+}
+
+/** Equip only an owned item of the matching category; replacing never consumes it. */
+export function equipInventoryItem(inventory: CharacterInventory, slot: EquipmentSlot, itemId?: string): CharacterInventory {
+  if (itemId && !inventory.items.some(item => item.id === itemId && item.slot === slot)) return inventory;
+  if (inventory.equipped[slot] === itemId) return inventory;
+  const equipped = { ...inventory.equipped };
+  if (itemId) equipped[slot] = itemId;
+  else delete equipped[slot];
+  return { ...inventory, equipped };
 }
 
 export function withEquipment(character: CharacterConfig, inventory: CharacterInventory): CharacterConfig {

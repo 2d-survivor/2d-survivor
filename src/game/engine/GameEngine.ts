@@ -1,6 +1,10 @@
+import { CompanionSystem } from '../systems/CompanionSystem';
+import { unlockCompanion, normalizeCompanions } from '../data/companions';
+import { AmazonTurnState, ForestCounters, createForestStages, currentForestStage, forestStageView } from '../data/forestMissions';
 import {
   EquipmentItem,
   CharacterConfig,
+  CompanionId,
   DifficultyConfig,
   DifficultyId,
   GameEndSummary,
@@ -59,7 +63,7 @@ import { getDifficulty } from '../data/difficulties';
 import { applyRunToMissions } from '../data/missions';
 
 export interface GameEngineCallbacks {
-  onHunterDialogue?: (quest: HunterQuestProgress) => void;
+  onHunterDialogue?: (quest: HunterQuestProgress, forest?: MissionObjectivesHUD) => void;
   onAnacondaDialogue?: () => void;
   onEquipmentReward: (item: EquipmentItem) => void;
   onGorillaDialogue?: () => void;
@@ -171,128 +175,6 @@ const OBJECTIVE_ACT2_PREDATORS = 2;
 const OBJECTIVE_ACT2_START = 300;
 const OBJECTIVE_MAP_END = 1200;
 
-// Random Amazon Forest missions: seven options per phase, drawn before the run.
-const AMAZON_TURN_ENDS = [300, 900, 1200] as const;
-const AMAZON_TURN_LABELS: Record<1 | 2 | 3, string> = {
-  1: 'Fase 1 · 00:00–05:00',
-  2: 'Fase 2 · 05:00–15:00',
-  3: 'Fase 3 · 15:00–20:00',
-};
-
-interface AmazonMissionTemplate {
-  id: string;
-  title: string;
-  metric: AmazonMissionMetric;
-  target: number;
-}
-
-const AMAZON_MISSION_BANK: Record<1 | 2 | 3, AmazonMissionTemplate[]> = {
-  1: [
-    { id: 'a1_fruits', title: 'Coletar frutas', metric: 'fruits', target: 5 },
-    { id: 'a1_level', title: 'Alcançar nível', metric: 'level', target: 10 },
-    {
-      id: 'a1_water',
-      title: 'Bichos na água/praia',
-      metric: 'waterKills',
-      target: 15,
-    },
-    { id: 'a1_gold', title: 'Juntar ouro', metric: 'gold', target: 300 },
-    {
-      id: 'a1_predators',
-      title: 'Abater predadores',
-      metric: 'evolvedPredators',
-      target: 1,
-    },
-    {
-      id: 'a1_fruits_big',
-      title: 'Coleta reforçada',
-      metric: 'fruits',
-      target: 8,
-    },
-    { id: 'a1_gold_big', title: 'Ouro da mata', metric: 'gold', target: 500 },
-  ],
-  2: [
-    { id: 'a2_fruits', title: 'Coletar frutas', metric: 'fruits', target: 10 },
-    { id: 'a2_level', title: 'Alcançar nível', metric: 'level', target: 20 },
-    {
-      id: 'a2_water',
-      title: 'Bichos na água/praia',
-      metric: 'waterKills',
-      target: 30,
-    },
-    {
-      id: 'a2_predators',
-      title: 'Abater predadores',
-      metric: 'evolvedPredators',
-      target: 3,
-    },
-    {
-      id: 'a2_bosses',
-      title: 'Derrotar chefes',
-      metric: 'bosses',
-      target: 5,
-    },
-    {
-      id: 'a2_fruits_big',
-      title: 'Fartura da floresta',
-      metric: 'fruits',
-      target: 15,
-    },
-    { id: 'a2_gold', title: 'Fortuna verde', metric: 'gold', target: 800 },
-  ],
-  3: [
-    { id: 'a3_level', title: 'Alcançar nível', metric: 'level', target: 30 },
-    {
-      id: 'a3_water',
-      title: 'Bichos na água/praia',
-      metric: 'waterKills',
-      target: 50,
-    },
-    {
-      id: 'a3_predators',
-      title: 'Abater predadores',
-      metric: 'evolvedPredators',
-      target: 5,
-    },
-    { id: 'a3_gold', title: 'Juntar ouro', metric: 'gold', target: 1500 },
-    {
-      id: 'a3_bosses',
-      title: 'Derrotar chefes',
-      metric: 'bosses',
-      target: 8,
-    },
-    {
-      id: 'a3_fruits',
-      title: 'Colheita final',
-      metric: 'fruits',
-      target: 20,
-    },
-    {
-      id: 'a3_water_big',
-      title: 'Rio infestado',
-      metric: 'waterKills',
-      target: 75,
-    },
-  ],
-};
-
-interface AmazonMissionBaseline {
-  fruits: number;
-  waterKills: number;
-  evolvedPredators: number;
-  bosses: number;
-  gold: number;
-}
-
-interface AmazonTurnState {
-  turn: 1 | 2 | 3;
-  endTime: number;
-  missions: AmazonMissionTemplate[];
-  baseline: AmazonMissionBaseline;
-  claimedMissions: string[];
-  bonusApplied: boolean;
-}
-
 interface AmazonObjectivesState {
   fruitsCollected: number;
   waterKills: number;
@@ -303,8 +185,6 @@ interface AmazonObjectivesState {
   act1Complete: boolean;
   act2Complete: boolean;
   act3Complete: boolean;
-  act1RewardApplied: boolean;
-  act2RewardApplied: boolean;
 }
 
 const RIVER_PREDATOR_PREY: EnemyType[] = [
@@ -333,6 +213,23 @@ const SUCURI_PREY: EnemyType[] = [
   'leafcutter_ant',
 ];
 
+// Derson's Special 1 — Entrega Expressa.
+const SPECIAL_1_COOLDOWN = 20;
+const SPECIAL_1_DASH_DURATION = 2.5;
+const SPECIAL_1_TRAIL_INTERVAL = 0.1;
+const SPECIAL_1_TRAIL_RADIUS = 48;
+const SPECIAL_1_TRAIL_DAMAGE = 4;
+const SPECIAL_1_TRAIL_DURATION = 3.2;
+const SPECIAL_1_PUSH_FORCE = 320;
+
+// Derson's Special 2 — Chuva de Pão de Queijo.
+const SPECIAL_2_COOLDOWN = 25;
+
+// Derson's Special 3 — Pedido Completo.
+const SPECIAL_3_COOLDOWN = 35;
+const SPECIAL_3_DURATION = 6;
+const SPECIAL_3_HEAL_FRACTION = 0.35;
+
 export class GameEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -348,6 +245,16 @@ export class GameEngine {
   public worldProps: WorldSystem;
   public vfx: VFXManager;
   public difficulty: DifficultyConfig;
+
+  private specialCooldown = 0;
+  private special2Cooldown = 0;
+  private special3Cooldown = 0;
+  private specialActiveTimer = 0;
+  private specialTrailTimer = 0;
+  private specialTrailId = 1;
+  private specialPrevX = 0;
+  private specialPrevY = 0;
+  private specialHitEnemies = new WeakSet<Enemy>();
 
   public enemies: Enemy[] = [];
   private readonly gorillaNpc: GorillaNpc | null;
@@ -553,11 +460,10 @@ export class GameEngine {
     act1Complete: false,
     act2Complete: false,
     act3Complete: false,
-    act1RewardApplied: false,
-    act2RewardApplied: false,
   };
   private amazonTurns: AmazonTurnState[] = [];
-  private amazonCurrentTurn: number = 0;
+  private companions: CompanionSystem;
+  private unlockedCompanions: CompanionId[] = [];
 
   private callbacks: GameEngineCallbacks;
 
@@ -595,8 +501,7 @@ export class GameEngine {
     if (this.caveUnlocked) this.worldProps.unlockForestCave();
     this.difficulty = getDifficulty(difficultyId);
     this.waveDirector = new WaveDirector(this.difficulty, mapId, this.worldProps);
-    this.amazonTurns = this.createAmazonMissionTurns();
-    this.beginAmazonTurn(0);
+    this.amazonTurns = createForestStages(this.difficulty.id);
 
     this.player = new Player(withEquipment(character, savedData.inventories?.[character.id] ?? emptyInventory()), savedData.powerUps);
     // Randomize the hero spawn on the Amazon Forest and snap the camera to it
@@ -623,6 +528,10 @@ export class GameEngine {
         itemUpgradesEnabled: !isBeastmaster,
       }
     );
+    this.weaponSystem.recalculatePlayerStats(this.player);
+    const companionSave = normalizeCompanions(savedData.inventories?.[character.id]?.unlockedCompanions, savedData.inventories?.[character.id]?.equippedCompanions);
+    this.unlockedCompanions = companionSave.unlockedCompanions;
+    this.companions = new CompanionSystem(this.player, companionSave.equippedCompanions);
     this.weaponSystem.recalculatePlayerStats(this.player);
     this.player.hp = this.player.maxHp;
 
@@ -660,12 +569,14 @@ export class GameEngine {
 
   public pause(): void {
     this.sound.setWaterWalking(false);
-    this.isPaused = true;  }
+    this.isPaused = true;
+  }
 
   public resume(): void {
     this.isPaused = false;
     this.input.clearJump();
     this.input.clearInteract();
+    this.input.clearSpecial();
     this.lastTime = performance.now();
   }
 
@@ -690,7 +601,7 @@ export class GameEngine {
     if (this.isPaused || !this.canTalkToHunter() || !this.callbacks.onHunterDialogue) return false;
     this.hunterQuest = getHunterQuest(loadSavedData().inventories[this.player.character.id] ?? emptyInventory());
     this.pause(); this.input.handlePointerUp();
-    this.callbacks.onHunterDialogue({ ...this.hunterQuest });
+    this.callbacks.onHunterDialogue({ ...this.hunterQuest }, this.getHunterForestMission());
     return true;
   }
 
@@ -769,7 +680,128 @@ export class GameEngine {
     this.animFrameId = requestAnimationFrame((time) => this.loop(time));
   }
 
+  private activateSpecial(slot: number): void {
+    if (this.player.character.id !== 'derson' || this.insideCave) return;
+
+    if (slot === 2) {
+      if (this.special2Cooldown > 0) return;
+      this.special2Cooldown = SPECIAL_2_COOLDOWN;
+      this.weaponSystem.spawnCheeseBreadRain(this.player);
+      this.weaponSystem.spawnRingPulse(this.player.x, this.player.y, 150, '#facc15', 0.4);
+      this.vfx.addSparks(this.player.x, this.player.y, '#facc15', 18);
+      this.camera.shake(0.18, 6);
+      this.sound.playSlash();
+      return;
+    }
+
+    if (slot === 3) {
+      if (this.special3Cooldown > 0) return;
+      this.special3Cooldown = SPECIAL_3_COOLDOWN;
+      const prevHp = this.player.hp;
+      this.player.heal(this.player.maxHp * SPECIAL_3_HEAL_FRACTION);
+      const healed = Math.round(this.player.hp - prevHp);
+      if (healed > 0) {
+        this.vfx.addDamageNumber(this.player.x, this.player.y, healed, false, true);
+      }
+      this.player.fullOrderTimer = Math.max(this.player.fullOrderTimer, SPECIAL_3_DURATION);
+      this.weaponSystem.spawnRingPulse(this.player.x, this.player.y, 120, '#34d399', 0.4);
+      this.vfx.addSparks(this.player.x, this.player.y, '#fbbf24', 18);
+      this.sound.playLevelUp();
+      return;
+    }
+
+    if (slot !== 1) return;
+    if (this.specialCooldown > 0 || this.specialActiveTimer > 0) return;
+
+    let dirX = this.input.dx;
+    let dirY = this.input.dy;
+    if (Math.hypot(dirX, dirY) <= 0.1) {
+      dirX = this.player.facingX;
+      dirY = this.player.facingY;
+    }
+    const magnitude = Math.hypot(dirX, dirY) || 1;
+    const nx = dirX / magnitude;
+    const ny = dirY / magnitude;
+
+    this.player.startSpecialDash(nx, ny, SPECIAL_1_DASH_DURATION);
+    this.specialCooldown = SPECIAL_1_COOLDOWN;
+    this.specialActiveTimer = SPECIAL_1_DASH_DURATION;
+    this.specialTrailTimer = 0;
+    this.specialPrevX = this.player.x;
+    this.specialPrevY = this.player.y;
+    this.specialHitEnemies = new WeakSet<Enemy>();
+  }
+
+  private updateSpecialAbility(dt: number): void {
+    if (this.specialCooldown > 0) {
+      this.specialCooldown = Math.max(0, this.specialCooldown - dt);
+    }
+    if (this.special2Cooldown > 0) {
+      this.special2Cooldown = Math.max(0, this.special2Cooldown - dt);
+    }
+    if (this.special3Cooldown > 0) {
+      this.special3Cooldown = Math.max(0, this.special3Cooldown - dt);
+    }
+    if (this.specialActiveTimer <= 0) return;
+
+    const currentX = this.player.x;
+    const currentY = this.player.y;
+    const segmentX = currentX - this.specialPrevX;
+    const segmentY = currentY - this.specialPrevY;
+    const segmentLengthSq = segmentX * segmentX + segmentY * segmentY;
+
+    for (let i = 0; i < this.enemies.length; i++) {
+      const enemy = this.enemies[i];
+      if (enemy.hp <= 0 || enemy.isSubmerged || enemy.isBoss || enemy.isElite) continue;
+      if (this.specialHitEnemies.has(enemy)) continue;
+
+      let t = segmentLengthSq > 0
+        ? ((enemy.x - this.specialPrevX) * segmentX + (enemy.y - this.specialPrevY) * segmentY) / segmentLengthSq
+        : 0;
+      t = Math.max(0, Math.min(1, t));
+      const closestX = this.specialPrevX + segmentX * t;
+      const closestY = this.specialPrevY + segmentY * t;
+      if (Math.hypot(enemy.x - closestX, enemy.y - closestY) > this.player.radius + enemy.radius + 12) {
+        continue;
+      }
+
+      const pushX = enemy.x - this.player.x;
+      const pushY = enemy.y - this.player.y;
+      const pushMagnitude = Math.hypot(pushX, pushY) || 1;
+      this.specialHitEnemies.add(enemy);
+      enemy.takeDamage(0, pushX / pushMagnitude, pushY / pushMagnitude, SPECIAL_1_PUSH_FORCE);
+      this.vfx.addSparks(enemy.x, enemy.y, '#f59e0b', 3);
+    }
+
+    this.specialTrailTimer -= dt;
+    while (this.specialTrailTimer <= 0) {
+      this.specialTrailTimer += SPECIAL_1_TRAIL_INTERVAL;
+      this.weaponSystem.groundZones.push({
+        id: -this.specialTrailId++,
+        type: 'coffee',
+        weaponId: 'derson_combo',
+        x: this.player.x,
+        y: this.player.y + this.player.radius * 0.35,
+        radius: SPECIAL_1_TRAIL_RADIUS,
+        tickDamage: SPECIAL_1_TRAIL_DAMAGE,
+        tickInterval: 0.35,
+        tickTimer: 0.05,
+        life: SPECIAL_1_TRAIL_DURATION,
+        maxLife: SPECIAL_1_TRAIL_DURATION,
+        isEvolved: false,
+      });
+    }
+
+    this.specialPrevX = currentX;
+    this.specialPrevY = currentY;
+    this.specialActiveTimer = Math.max(0, this.specialActiveTimer - dt);
+  }
+
   private update(dt: number): void {
+    const specialRequested = this.input.consumeSpecial();
+    if (specialRequested !== null) this.activateSpecial(specialRequested);
+    this.updateSpecialAbility(dt);
+
     this.tribeHunter?.update(dt);
     this.anacondaNpc?.update(dt);
     this.kopenawaNpc?.update(dt);
@@ -781,6 +813,7 @@ export class GameEngine {
       this.player.isInMud = false;
       this.player.isMired = false;
       this.player.terrainSpeedMultiplier = 1;
+      this.companions.update(dt, this.player, this.vfx);
       if (!this.player.update(dt, this.input)) { this.handlePlayerDeath(); return; }
       if (interactRequested && this.caveInterior.nearExit(this.player)) {
         this.insideCave = false;
@@ -818,7 +851,8 @@ export class GameEngine {
       return;
     }
     if (interactRequested && !this.bossEncounter && this.caveUnlocked && Math.hypot(this.player.x + 1950, this.player.y - 1935) < 75) {
-      this.insideCave = true;      this.sound.startCaveAmbience();
+      this.insideCave = true;
+      this.sound.startCaveAmbience();
       this.player.x = this.caveInterior.spawn.x;
       this.player.y = this.caveInterior.spawn.y;
       this.player.knockbackVX = 0;
@@ -871,6 +905,7 @@ export class GameEngine {
           : 1;
 
     // 2. Update Player
+    this.companions.update(dt, this.player, this.vfx);
     const playerAlive = this.player.update(dt, this.input);
     if (!playerAlive) {
       this.handlePlayerDeath();
@@ -2240,124 +2275,45 @@ export class GameEngine {
     }
   }
 
-  private createAmazonMissionTurns(): AmazonTurnState[] {
-    let count = 1;
-    if (this.difficulty.id === 'hard') {
-      count = 2;
-    } else if (this.difficulty.id === 'nightmare' || this.difficulty.id === 'infernal') {
-      count = 3;
-    }
-
-    return ([1, 2, 3] as const).map((turn) => {
-      const options = [...AMAZON_MISSION_BANK[turn]];
-      for (let i = options.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [options[i], options[j]] = [options[j], options[i]];
-      }
-      return {
-        turn,
-        endTime: AMAZON_TURN_ENDS[turn - 1],
-        missions: options.slice(0, count),
-        baseline: {
-          fruits: 0,
-          waterKills: 0,
-          evolvedPredators: 0,
-          bosses: 0,
-          gold: 0,
-        },
-        claimedMissions: [],
-        bonusApplied: false,
-      };
-    });
-  }
-
-  private beginAmazonTurn(index: number): void {
-    this.amazonCurrentTurn = index;
-    const turn = this.amazonTurns[index];
-    if (!turn) return;
-    turn.baseline = {
-      fruits: this.amazonObjectives.fruitsCollected,
-      waterKills: this.amazonObjectives.waterKills,
-      evolvedPredators: this.amazonObjectives.evolvedPredatorsDefeated,
-      bosses: this.amazonObjectives.folkloreBossesDefeated,
-      gold: this.goldCollected,
+  private forestCounters(): ForestCounters {
+    return {
+      fruits: this.amazonObjectives.fruitsCollected, waterKills: this.amazonObjectives.waterKills,
+      evolvedPredators: this.amazonObjectives.evolvedPredatorsDefeated, bosses: this.amazonObjectives.folkloreBossesDefeated,
+      gold: this.goldCollected, level: this.player.level
     };
   }
 
-  private getAmazonMissionProgress(
-    turn: AmazonTurnState,
-    mission: AmazonMissionTemplate
-  ): number {
-    switch (mission.metric) {
-      case 'level':
-        return this.player.level;
-      case 'fruits':
-        return this.amazonObjectives.fruitsCollected - turn.baseline.fruits;
-      case 'waterKills':
-        return this.amazonObjectives.waterKills - turn.baseline.waterKills;
-      case 'evolvedPredators':
-        return (
-          this.amazonObjectives.evolvedPredatorsDefeated - turn.baseline.evolvedPredators
-        );
-      case 'bosses':
-        return this.amazonObjectives.folkloreBossesDefeated - turn.baseline.bosses;
-      case 'gold':
-        return this.goldCollected - turn.baseline.gold;
-      default:
-        return 0;
-    }
+  public getHunterForestMission(): MissionObjectivesHUD | undefined {
+    if (!this.waveDirector.isAmazonForest) return undefined;
+    const time = this.waveDirector.survivalTime;
+    return forestStageView(currentForestStage(this.amazonTurns, time), this.forestCounters(), time, this.unlockedCompanions);
   }
 
-  private updateAmazonMissionTurn(): void {
-    if (!this.waveDirector.isAmazonForest) return;
-    const turn = this.amazonTurns[this.amazonCurrentTurn];
-    if (!turn) return;
-
-    // The next phase only starts when the clock reaches its exact time. Any
-    // objective completed but not claimed before then is lost.
-    if (this.waveDirector.survivalTime < turn.endTime) return;
-
-    if (this.amazonCurrentTurn < this.amazonTurns.length - 1) {
-      this.beginAmazonTurn(this.amazonCurrentTurn + 1);
-    }
-  }
-
-  public claimAmazonMission(missionId: string): boolean {
-    if (!this.waveDirector.isAmazonForest) return false;
-    const turn = this.amazonTurns[this.amazonCurrentTurn];
-    if (!turn) return false;
-    if (this.waveDirector.survivalTime >= turn.endTime) return false;
-
-    const mission = turn.missions.find((item) => item.id === missionId);
-    if (!mission || turn.claimedMissions.includes(mission.id)) return false;
-    if (this.getAmazonMissionProgress(turn, mission) < mission.target) return false;
-
-    turn.claimedMissions.push(mission.id);
-    this.sound.playMissionClaim();
-    if (!turn.bonusApplied) {
-      turn.bonusApplied = true;
-      this.applyAmazonTurnBonus(turn.turn);
-    }
+  public acceptForestStage(): boolean {
+    if (!this.isPaused || !this.canTalkToHunter() || this.getHunterForestMission()?.status !== 'available') return false;
+    const stage = currentForestStage(this.amazonTurns, this.waveDirector.survivalTime);
+    stage.baseline = { ...this.forestCounters() };
+    stage.accepted = true;
     this.syncHUD();
+    this.callbacks.onHunterDialogue?.({ ...this.hunterQuest }, this.getHunterForestMission());
     return true;
   }
 
-  private applyAmazonTurnBonus(turn: 1 | 2 | 3): void {
-    this.sound.playLevelUp();
-    this.vfx.triggerFlash('#fbbf24', 0.25);
-    if (turn === 1) {
-      this.amazonObjectives.act1RewardApplied = true;
-      this.player.objectiveSpeedBonus = Math.max(this.player.objectiveSpeedBonus, 0.1);
-      this.weaponSystem.recalculatePlayerStats(this.player);
-    } else if (turn === 2) {
-      this.amazonObjectives.act2RewardApplied = true;
-      this.player.objectiveMightBonus = Math.max(this.player.objectiveMightBonus, 0.2);
-      this.player.objectiveRecoveryBonus = Math.max(this.player.objectiveRecoveryBonus, 1);
-      this.weaponSystem.recalculatePlayerStats(this.player);
-    } else {
-      this.goldCollected += 300;
-      this.vfx.addDamageNumber(this.player.x, this.player.y, 300, true, true);
-    }
+  public deliverForestStage(): boolean {
+    if (!this.isPaused || !this.canTalkToHunter() || this.getHunterForestMission()?.status !== 'ready') return false;
+    const stage = currentForestStage(this.amazonTurns, this.waveDirector.survivalTime);
+    const reward = this.getHunterForestMission()!.reward;
+    const data = loadSavedData();
+    const id = this.player.character.id;
+    const inventory = data.inventories[id] ?? emptyInventory();
+    const next = unlockCompanion(inventory, reward);
+    saveGameData({ ...data, inventories: { ...data.inventories, [id]: next } });
+    this.unlockedCompanions = next.unlockedCompanions ?? [];
+    stage.delivered = true;
+    this.sound.playMissionClaim();
+    this.syncHUD();
+    this.callbacks.onHunterDialogue?.({ ...this.hunterQuest }, this.getHunterForestMission());
+    return true;
   }
 
   private trackAmazonObjectiveKill(enemy: Enemy): void {
@@ -2383,7 +2339,7 @@ export class GameEngine {
   private updateAmazonObjectives(): boolean {
     if (!this.waveDirector.isAmazonForest) return false;
 
-    this.updateAmazonMissionTurn();
+
 
     const objectives = this.amazonObjectives;
 
@@ -2415,42 +2371,6 @@ export class GameEngine {
     }
 
     return false;
-  }
-
-  private buildObjectivesHUD(): MissionObjectivesHUD {
-    const turn = this.amazonTurns[this.amazonCurrentTurn];
-    if (!turn) {
-      return {
-        turn: 1,
-        turnLabel: AMAZON_TURN_LABELS[1],
-        missions: [],
-      };
-    }
-
-    return {
-      turn: turn.turn,
-      turnLabel: AMAZON_TURN_LABELS[turn.turn],
-      missions: turn.missions.map((mission) => {
-        const progress = Math.min(
-          mission.target,
-          Math.max(0, this.getAmazonMissionProgress(turn, mission))
-        );
-        const claimed = turn.claimedMissions.includes(mission.id);
-        const complete = progress >= mission.target;
-        return {
-          id: mission.id,
-          title: mission.title,
-          progress,
-          target: mission.target,
-          complete,
-          claimed,
-          claimable:
-            complete &&
-            !claimed &&
-            this.waveDirector.survivalTime < turn.endTime,
-        };
-      }),
-    };
   }
 
   /** Emit hit feedback only when an attack actually removes health. */
@@ -3110,9 +3030,13 @@ export class GameEngine {
       const id = this.player.character.id;
       const inventory = data.inventories[id] ?? emptyInventory();
       if (!inventory.items.some(item => item.id === drop.item.id)) {
-        saveGameData({ ...data, inventories: { ...data.inventories, [id]: {
-          ...inventory, items: [...inventory.items, { ...drop.item, stats: { ...drop.item.stats } }],
-        } } });
+        saveGameData({
+          ...data, inventories: {
+            ...data.inventories, [id]: {
+              ...inventory, items: [...inventory.items, { ...drop.item, stats: { ...drop.item.stats } }],
+            }
+          }
+        });
         if (drop.item.id === GUARDIAN_BOW.id) this.caveRewardClaimed = true;
         this.pause(); this.input.handlePointerUp(); this.sound.playMissionClaim();
         this.callbacks.onEquipmentReward(drop.item);
@@ -3464,11 +3388,48 @@ export class GameEngine {
 
     const activeBoss = this.waveDirector.bossActive
       ? {
-          name: this.waveDirector.bossActive.name,
-          hp: this.waveDirector.bossActive.hp,
-          maxHp: this.waveDirector.bossActive.maxHp,
-        }
+        name: this.waveDirector.bossActive.name,
+        hp: this.waveDirector.bossActive.hp,
+        maxHp: this.waveDirector.bossActive.maxHp,
+      }
       : undefined;
+
+    const isDerson = this.player.character.id === 'derson';
+    const specialAbilities = [
+      {
+        key: '1',
+        name: isDerson ? 'Entrega Expressa' : undefined,
+        description: isDerson
+          ? 'Arrancada invulnerável de 2,5s que empurra inimigos e deixa um rastro de café fervente.'
+          : 'Especial exclusivo do Derson.',
+        cooldown: isDerson ? this.specialCooldown : 0,
+        cooldownMax: SPECIAL_1_COOLDOWN,
+        unlocked: isDerson,
+        active: isDerson && this.specialActiveTimer > 0,
+      },
+      {
+        key: '2',
+        name: isDerson ? 'Chuva de Pão de Queijo' : undefined,
+        description: isDerson
+          ? 'Dispara 20 pães de queijo explosivos em 360°, causando dano em área, empurrando e atordoando a horda.'
+          : 'Especial exclusivo do Derson.',
+        cooldown: isDerson ? this.special2Cooldown : 0,
+        cooldownMax: SPECIAL_2_COOLDOWN,
+        unlocked: isDerson,
+        active: false,
+      },
+      {
+        key: '3',
+        name: isDerson ? 'Pedido Completo' : undefined,
+        description: isDerson
+          ? 'Restaura instantaneamente 35% do HP máximo e dobra a velocidade de ataque e movimento por 6s.'
+          : 'Especial exclusivo do Derson.',
+        cooldown: isDerson ? this.special3Cooldown : 0,
+        cooldownMax: SPECIAL_3_COOLDOWN,
+        unlocked: isDerson,
+        active: isDerson && this.player.fullOrderTimer > 0,
+      },
+    ];
 
     this.callbacks.onHUDUpdate({
       hunterQuest: this.tribeHunter ? { ...this.hunterQuest } : undefined,
@@ -3490,7 +3451,10 @@ export class GameEngine {
       petStance: this.petStance,
       activeBoss,
       eventAlert: this.waveDirector.eventAlert || undefined,
-      objectives: this.buildObjectivesHUD(),
+      objectives: this.getHunterForestMission(),
+      companions: [...this.companions.ids],
+      companionShield: Math.ceil(this.player.companionShield),
+      specialAbilities,
     });
   }
 
@@ -3500,6 +3464,7 @@ export class GameEngine {
     if (this.insideCave) {
       this.caveInterior.render(ctx, camera, this.player, this.caveUnlocked, this.caveRewardClaimed);
       this.player.render(ctx, camera);
+      this.companions.render(ctx, camera, this.player);
       return;
     }
     // 1. Clear & Render Floor Tile Pattern
@@ -3573,6 +3538,7 @@ export class GameEngine {
     }
     if (this.kopenawaAvailable && this.kopenawaNpc && this.player.y >= this.kopenawaNpc.y) this.kopenawaNpc.render(ctx, camera);
     this.player.render(ctx, camera);
+    this.companions.render(ctx, camera, this.player);
     for (let i = 0; i < this.pets.length; i++) {
       this.pets[i].render(ctx, camera);
     }
@@ -4135,7 +4101,7 @@ export class GameEngine {
     const resized = image.width !== pixels || image.height !== pixels;
     if (resized) { image.width = pixels; image.height = pixels; }
     if (resized || now - this.minimapUpdatedAt >= 1000 / 12 ||
-        Math.hypot(this.player.x - this.minimapPlayerX, this.player.y - this.minimapPlayerY) > 400) {
+      Math.hypot(this.player.x - this.minimapPlayerX, this.player.y - this.minimapPlayerY) > 400) {
       const buffer = image.getContext('2d');
       if (!buffer) { this.drawMinimap(ctx, size, x, y); return; }
       buffer.setTransform(scale, 0, 0, scale, 0, 0);

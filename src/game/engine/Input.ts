@@ -15,6 +15,7 @@ export class InputManager {
   public facingY: number = 0;
   private jumpQueued: boolean = false;
   private interactQueued: boolean = false;
+  private specialQueued: number | null = null;
 
   // Virtual Joystick for touch / mouse
   public joystick: VirtualJoystickState = {
@@ -67,9 +68,18 @@ export class InputManager {
     if (e.code === 'KeyR' && !wasPressed) {
       this.onPetStanceToggle?.();
     }
-    if (e.code === 'Digit1') this.onOptionSelect?.(0);
-    if (e.code === 'Digit2') this.onOptionSelect?.(1);
-    if (e.code === 'Digit3') this.onOptionSelect?.(2);
+    if (e.code === 'Digit1') {
+      if (!wasPressed) this.specialQueued = 1;
+      this.onOptionSelect?.(0);
+    }
+    if (e.code === 'Digit2') {
+      if (!wasPressed) this.specialQueued = 2;
+      this.onOptionSelect?.(1);
+    }
+    if (e.code === 'Digit3') {
+      if (!wasPressed) this.specialQueued = 3;
+      this.onOptionSelect?.(2);
+    }
   }
 
   private handleKeyUp(e: KeyboardEvent): void {
@@ -81,6 +91,7 @@ export class InputManager {
     this.keys = {};
     this.jumpQueued = false;
     this.interactQueued = false;
+    this.specialQueued = null;
     this.joystick.active = false;
     this.dx = 0;
     this.dy = 0;
@@ -108,6 +119,16 @@ export class InputManager {
 
   public clearInteract(): void {
     this.interactQueued = false;
+  }
+
+  public consumeSpecial(): number | null {
+    const slot = this.specialQueued;
+    this.specialQueued = null;
+    return slot;
+  }
+
+  public clearSpecial(): void {
+    this.specialQueued = null;
   }
 
   public handlePointerDown(x: number, y: number): void {

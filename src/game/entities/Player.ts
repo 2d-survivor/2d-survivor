@@ -102,7 +102,10 @@ export class Player {
   public knockbackVX: number = 0;
   public knockbackVY: number = 0;
   public attackSpeedBoostTimer: number = 0;
+  public fullOrderTimer: number = 0;
   public shieldTimer: number = 0;
+  public companionShield: number = 0;
+  public companionSpeedBonus: number = 0;
   // Thorn bush wound: damage every second until cured by the São-Caetano herb.
   public bleedTimer: number = 0;
   public bleedTickTimer: number = 0;
@@ -299,6 +302,17 @@ export class Player {
     this.knockbackVY = velocityY;
   }
 
+  /** Derson's Entrega Expressa: a long, invulnerable dash in a fixed direction. */
+  public startSpecialDash(dirX: number, dirY: number, duration: number): void {
+    const magnitude = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
+    this.dashDirX = dirX / magnitude;
+    this.dashDirY = dirY / magnitude;
+    this.facingX = this.dashDirX;
+    this.facingY = this.dashDirY;
+    this.dashTimer = Math.max(this.dashTimer, duration);
+    this.invulnerableTimer = Math.max(this.invulnerableTimer, duration);
+  }
+
   update(dt: number, input: InputManager): boolean {
     // Simulation time keeps animation frozen whenever the engine is paused.
     this.idleAnimTimer = (this.idleAnimTimer + dt) % 4;
@@ -356,6 +370,10 @@ export class Player {
 
     if (this.attackSpeedBoostTimer > 0) {
       this.attackSpeedBoostTimer = Math.max(0, this.attackSpeedBoostTimer - dt);
+    }
+
+    if (this.fullOrderTimer > 0) {
+      this.fullOrderTimer = Math.max(0, this.fullOrderTimer - dt);
     }
 
     if (this.shieldTimer > 0) {
@@ -455,9 +473,10 @@ export class Player {
 
     const dashing = this.dashTimer > 0;
     const speedBoost = this.speedBoostTimer > 0 ? 1.15 : 1;
+    const fullOrderSpeedBoost = this.fullOrderTimer > 0 ? 2 : 1;
     const slowMult = this.slowTimer > 0 ? Math.max(0.35, 1 - this.slowFactor) : 1;
     const effectiveSpeed =
-      this.speed * speedBoost * slowMult * this.terrainSpeedMultiplier;
+      this.speed * speedBoost * fullOrderSpeedBoost * slowMult * this.terrainSpeedMultiplier;
 
     let moveX = moving ? dx * effectiveSpeed * dt : 0;
     let moveY = moving ? dy * effectiveSpeed * dt : 0;
@@ -578,7 +597,9 @@ export class Player {
     // Pupunha shield: halve incoming damage while the buff lasts.
     const shieldedAmount = this.shieldTimer > 0 ? amount * 0.5 : amount;
     const reducedAmount = Math.max(1, Math.max(1, Math.round(shieldedAmount - this.armor)) * (1 - Math.min(0.9, Math.max(0, this.character.statBonuses.damageReduction ?? 0))));
-    this.hp -= reducedAmount;
+    const absorbed = Math.min(this.companionShield, reducedAmount);
+    this.companionShield -= absorbed;
+    this.hp -= reducedAmount - absorbed;
     this.invulnerableTimer = 0.5; // Half-second i-frames
 
     if (this.hp <= 0) {
@@ -904,6 +925,18 @@ export class Player {
       ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.arc(screen.x, screen.y - 6, 30, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Derson's Pedido Completo overdrive aura.
+    if (this.fullOrderTimer > 0) {
+      const pulse = 0.55 + Math.sin(this.idleAnimTimer * Math.PI * 4) * 0.25;
+      ctx.save();
+      ctx.strokeStyle = `rgba(251, 191, 36, ${pulse.toFixed(2)})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y - 6, 33, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
