@@ -323,6 +323,8 @@ export const GameContainer: React.FC = () => {
           onToggleMute={handleToggleMute}
           difficultyName={getDifficulty(selectedDifficulty).name}
           onClaimMission={handleClaimMission}
+          onReleasePet={(index) => engineRef.current?.releasePet(index)}
+          onTogglePetStance={() => engineRef.current?.togglePetStance()}
         />
       )}
 

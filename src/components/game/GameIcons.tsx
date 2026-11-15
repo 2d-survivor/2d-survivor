@@ -35,6 +35,10 @@ import {
   Sprout,
   Droplet,
   Ghost,
+  PawPrint,
+  Users,
+  HeartPulse,
+  Radar,
 } from 'lucide-react';
 
 export function renderWeaponIcon(id: WeaponId, sizeClass: string = 'w-4 h-4'): React.ReactNode {
@@ -241,6 +245,14 @@ export function renderNamedIcon(
       return <Droplet className={c('text-red-500')} />;
     case 'Ghost':
       return <Ghost className={c('text-purple-300')} />;
+    case 'PawPrint':
+      return <PawPrint className={c('text-lime-400')} />;
+    case 'Users':
+      return <Users className={c('text-lime-300')} />;
+    case 'HeartPulse':
+      return <HeartPulse className={c('text-rose-300')} />;
+    case 'Radar':
+      return <Radar className={c('text-amber-300')} />;
     default:
       return <Flame className={c('text-amber-400')} />;
   }

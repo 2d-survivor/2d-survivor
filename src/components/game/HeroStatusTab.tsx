@@ -5,7 +5,7 @@ import { Player } from '@/game/entities/Player';
 import { CHARACTERS } from '@/game/data/characters';
 import { LULA_SKILL, WEAPON_REGISTRY } from '@/game/data/upgrades';
 import type { CharacterConfig } from '@/game/types';
-import { renderWeaponIcon } from './GameIcons';
+import { renderNamedIcon, renderWeaponIcon } from './GameIcons';
 
 // Level-1 starter-weapon values mirrored from WeaponSystem.fireWeapon and each
 // trigger. Damage is shown before the character's might bonus; cooldown is
@@ -27,6 +27,9 @@ const formatNumber = (value: number, digits = 1): string =>
 const formatSeconds = (value: number): string => `${formatNumber(value, 2)} s`;
 
 function describeCharacterPassive(character: CharacterConfig): string {
+  if (character.id === 'domador_feras') {
+    return 'Aura de Doma: marca fauna comum abaixo de 40% de HP e converte a criatura abatida em um pet aliado (limite inicial de 2).';
+  }
   const bonuses = character.statBonuses;
   const parts: string[] = [];
   if (bonuses.maxHp) parts.push(`+${formatNumber(bonuses.maxHp)} HP máx`);
@@ -72,7 +75,7 @@ export const HeroStatusTab: React.FC = () => {
       CHARACTERS.map((character) => ({
         character,
         player: new Player(character),
-        weapon: WEAPON_REGISTRY[character.startingWeapon],
+        weapon: character.startingWeapon ? WEAPON_REGISTRY[character.startingWeapon] : undefined,
       })),
     []
   );
@@ -88,6 +91,7 @@ export const HeroStatusTab: React.FC = () => {
       <div className="flex max-h-[30rem] w-full flex-col gap-3 overflow-y-auto pr-1">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {heroes.map(({ character, player, weapon }) => {
+            const hasWeapon = Boolean(character.startingWeapon && weapon);
             const profile = HERO_WEAPON_LEVEL_ONE[character.id] ?? {
               damage: [0],
               cooldown: 0,
@@ -134,15 +138,31 @@ export const HeroStatusTab: React.FC = () => {
                   <StatRow label="Velocidade" value={`${formatNumber(player.speed)} u/s`} />
                   <StatRow
                     label="Dano Base"
-                    value={`${damage}${profile.damageNote ? ` (${profile.damageNote})` : ''}`}
+                    value={
+                      hasWeapon
+                        ? `${damage}${profile.damageNote ? ` (${profile.damageNote})` : ''}`
+                        : '—'
+                    }
                   />
-                  <StatRow label="Cooldown" value={`${formatSeconds(cooldown)} por ataque`} />
                   <StatRow
-                    label="Arma Nativa"
+                    label="Cooldown"
+                    value={hasWeapon ? `${formatSeconds(cooldown)} por ataque` : '—'}
+                  />
+                  <StatRow
+                    label="Habilidade Nativa"
                     value={
                       <span className="flex items-center justify-end gap-1">
-                        {renderWeaponIcon(character.startingWeapon, 'w-4 h-4')}
-                        <span>{weapon.name}</span>
+                        {character.startingWeapon && weapon ? (
+                          <>
+                            {renderWeaponIcon(character.startingWeapon, 'w-4 h-4')}
+                            <span>{weapon.name}</span>
+                          </>
+                        ) : (
+                          <>
+                            {renderNamedIcon('PawPrint', 'w-4 h-4')}
+                            <span>Aura de Doma</span>
+                          </>
+                        )}
                       </span>
                     }
                   />

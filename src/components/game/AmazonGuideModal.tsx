@@ -351,6 +351,9 @@ const HERO_WEAPON_LEVEL_ONE: Record<
 };
 
 function describeCharacterPassive(character: CharacterConfig): string {
+  if (character.id === 'domador_feras') {
+    return 'Aura de Doma: marca fauna comum abaixo de 40% de HP e converte a criatura abatida em um pet aliado (limite inicial de 2).';
+  }
   const bonuses = character.statBonuses;
   const parts: string[] = [];
   if (bonuses.maxHp) parts.push(`+${formatGuideNumber(bonuses.maxHp)} HP máx`);
@@ -866,7 +869,7 @@ export const AmazonGuideModal: React.FC<AmazonGuideModalProps> = ({ onClose }) =
         return {
           character,
           player,
-          weapon: WEAPON_REGISTRY[character.startingWeapon],
+          weapon: character.startingWeapon ? WEAPON_REGISTRY[character.startingWeapon] : undefined,
         };
       }),
     []
@@ -1131,6 +1134,7 @@ export const AmazonGuideModal: React.FC<AmazonGuideModalProps> = ({ onClose }) =
                       damageNote: undefined,
                     };
                   const might = player.might;
+                  const hasWeapon = Boolean(character.startingWeapon && weapon);
                   const cooldown =
                     profile.cooldown *
                     Math.max(0.45, 1 - player.cooldownReduction) *
@@ -1180,15 +1184,20 @@ export const AmazonGuideModal: React.FC<AmazonGuideModalProps> = ({ onClose }) =
                         />
                         <GuideStatRow
                           label="Dano Base"
-                          value={`${damage}${
-                            profile.damageNote ? ` (${profile.damageNote})` : ''
-                          }`}
+                          value={
+                            hasWeapon
+                              ? `${damage}${profile.damageNote ? ` (${profile.damageNote})` : ''}`
+                              : '—'
+                          }
                         />
                         <GuideStatRow
                           label="Cooldown/Cadência"
-                          value={`${formatSeconds(cooldown)} por ataque`}
+                          value={hasWeapon ? `${formatSeconds(cooldown)} por ataque` : '—'}
                         />
-                        <GuideStatRow label="Arma Nativa" value={weapon.name} />
+                        <GuideStatRow
+                          label="Habilidade Nativa"
+                          value={weapon ? weapon.name : 'Aura de Doma'}
+                        />
                         <GuideStatRow
                           label="Habilidade Passiva"
                           value={describeCharacterPassive(character)}

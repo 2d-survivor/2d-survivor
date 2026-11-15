@@ -260,6 +260,8 @@ export class WeaponSystem {
   public readonly maxWeaponSlots: number;
   public readonly maxPassiveSlots: number;
   public readonly maxItemLevel: number;
+  /** Beastmaster runs keep item upgrades off and rely on the native pet aura. */
+  public readonly itemUpgradesEnabled: boolean;
 
   public projectiles: Projectile[] = [];
   public slashEffects: SlashEffect[] = [];
@@ -292,17 +294,23 @@ export class WeaponSystem {
   private bottleImage: HTMLImageElement | null = null;
 
   constructor(
-    startingWeapon: WeaponId,
-    options: { maxWeaponSlots?: number; maxPassiveSlots?: number; maxItemLevel?: number } = {}
+    startingWeapon: WeaponId | null,
+    options: {
+      maxWeaponSlots?: number;
+      maxPassiveSlots?: number;
+      maxItemLevel?: number;
+      itemUpgradesEnabled?: boolean;
+    } = {}
   ) {
     this.maxWeaponSlots = options.maxWeaponSlots ?? 6;
     this.maxPassiveSlots = options.maxPassiveSlots ?? 6;
     this.maxItemLevel = options.maxItemLevel ?? 0;
+    this.itemUpgradesEnabled = options.itemUpgradesEnabled ?? true;
     if (typeof Image !== 'undefined') {
       this.bottleImage = new Image();
       this.bottleImage.src = '/bottle-51.svg';
     }
-    this.addWeapon(startingWeapon);
+    if (startingWeapon) this.addWeapon(startingWeapon);
   }
 
   private weaponMaxLevel(id: WeaponId): number {
@@ -4080,6 +4088,7 @@ export class WeaponSystem {
   }
 
   public resolveChestUpgrade(): UpgradeOption | undefined {
+    if (!this.itemUpgradesEnabled) return undefined;
     // 1. Priority 1: Evolution at the weapon's maximum level with its synergy passive.
     const readyEvolutions: UpgradeOption[] = [];
     for (const [wId, w] of this.weapons.entries()) {
@@ -4153,7 +4162,7 @@ export class WeaponSystem {
 
   /** Returns one card per fusion recipe whose weapon and passive are both maxed. */
   private collectFusionOptions(): UpgradeOption[] {
-    if (!this.maxItemLevel) return [];
+    if (!this.maxItemLevel || !this.itemUpgradesEnabled) return [];
     const ready: UpgradeOption[] = [];
     for (const recipe of FUSION_RECIPES) {
       const weapon = this.weapons.get(recipe.weaponId);
@@ -4178,6 +4187,8 @@ export class WeaponSystem {
   }
 
   generateUpgradeOptions(): UpgradeOption[] {
+    // Beastmaster: no common weapons, traditional passives or fusions.
+    if (!this.itemUpgradesEnabled) return [];
     interface WeightedCandidate {
       option: UpgradeOption;
       weight: number;

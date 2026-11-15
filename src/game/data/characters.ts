@@ -99,4 +99,21 @@ export const CHARACTERS: CharacterConfig[] = [
       speed: 0.0556,
     },
   },
+  {
+    id: 'domador_feras',
+    name: 'Domador de Feras',
+    title: 'Beastmaster',
+    description:
+      'Andarilho que enxerga aliados na fauna da floresta. Sua Aura de Doma converte animais enfraquecidos em feras leais.',
+    iconName: 'PawPrint',
+    color: '#3f6212',
+    portraitColor: '#1a2e05',
+    statBonuses: {
+      maxHp: 15,
+      armor: 1,
+      // 160 u/s base * (1 - 0.25) = 120 u/s, o atributo base pedido.
+      speed: -0.25,
+      recovery: 0.5,
+    },
+  },
 ];

@@ -14,7 +14,30 @@ import {
   VolumeX,
   Pause,
   Fish,
+  Bird,
+  Bug,
+  PawPrint,
+  Shield,
+  Swords,
 } from 'lucide-react';
+
+const PET_BIRD_TYPES = new Set(['toucan', 'blue_butterfly', 'cicada', 'bat']);
+const PET_BUG_TYPES = new Set([
+  'bullet_ant',
+  'leafcutter_ant',
+  'giant_centipede',
+  'rhino_beetle',
+  'sawyer_beetle',
+  'praying_mantis',
+  'stick_bug',
+]);
+
+/** Pet bar icon: birds and insects keep their silhouette, the rest use a paw. */
+function renderPetIcon(type: string, sizeClass: string = 'h-6 w-6'): React.ReactNode {
+  if (PET_BIRD_TYPES.has(type)) return <Bird className={`${sizeClass} text-lime-300`} />;
+  if (PET_BUG_TYPES.has(type)) return <Bug className={`${sizeClass} text-amber-300`} />;
+  return <PawPrint className={`${sizeClass} text-emerald-300`} />;
+}
 
 interface HUDProps {
   hud: HUDState;
@@ -23,6 +46,8 @@ interface HUDProps {
   onToggleMute: () => void;
   difficultyName: string;
   onClaimMission: (missionId: string) => void;
+  onReleasePet: (index: number) => void;
+  onTogglePetStance: () => void;
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -32,6 +57,8 @@ export const HUD: React.FC<HUDProps> = ({
   onToggleMute,
   difficultyName,
   onClaimMission,
+  onReleasePet,
+  onTogglePetStance,
 }) => {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -42,6 +69,8 @@ export const HUD: React.FC<HUDProps> = ({
   const hpPercent = Math.min(100, Math.max(0, (hud.playerHp / Math.max(1, hud.playerMaxHp)) * 100));
   const staminaPercent = Math.min(100, Math.max(0, (hud.stamina / Math.max(1, hud.maxStamina)) * 100));
   const objectives = hud.objectives;
+  const petStance = hud.petStance ?? 'aggressive';
+  const isAggressiveStance = petStance === 'aggressive';
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none flex flex-col justify-between p-3 font-sans text-white">
@@ -282,6 +311,103 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Pet bar: Domador de Feras companions (Alt + Right Click releases) */}
+      {hud.pets && hud.pets.length > 0 && (
+        <div
+          className={`absolute left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-1 ${
+            hud.hunterQuest?.accepted && !hud.hunterQuest.completed ? 'bottom-[11.5rem]' : 'bottom-11'
+          }`}
+        >
+          <div className="pointer-events-auto flex items-end gap-2 rounded-xl border border-amber-700/60 bg-slate-950/85 px-2.5 py-2 shadow-2xl backdrop-blur-md">
+            {hud.pets.map((pet, index) => {
+              const petHpPercent = Math.max(0, Math.min(100, (pet.hp / Math.max(1, pet.maxHp)) * 100));
+              const evolutionProgress =
+                pet.evolved || hud.level < 10 ? null : Math.min(100, (pet.age / 60) * 100);
+              const releaseLabel = `${pet.name} — ${pet.hp}/${pet.maxHp} HP${
+                pet.evolved ? ' • Evoluído' : ''
+              }\nAlt + Clique Direito para libertar`;
+              return (
+                <button
+                  key={`${pet.type}-${index}`}
+                  type="button"
+                  title={releaseLabel}
+                  aria-label={`${pet.name}: ${pet.hp} de ${pet.maxHp} HP. Alt mais clique direito para libertar.`}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    if (event.altKey) onReleasePet(index);
+                  }}
+                  className={`relative flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg border bg-gradient-to-b from-slate-900 to-slate-950 px-1 py-1 transition active:scale-95 ${
+                    pet.evolved
+                      ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.55)]'
+                      : 'border-amber-700/70 hover:border-amber-500'
+                  }`}
+                >
+                  {renderPetIcon(pet.type, 'h-6 w-6')}
+                  <span className="w-full truncate text-center text-[8px] font-bold uppercase tracking-wide text-slate-300">
+                    {pet.name}
+                  </span>
+                  <div
+                    role="progressbar"
+                    aria-label={`Vida de ${pet.name}`}
+                    aria-valuemin={0}
+                    aria-valuemax={pet.maxHp}
+                    aria-valuenow={pet.hp}
+                    className="h-1.5 w-full overflow-hidden rounded-full border border-slate-700 bg-slate-800"
+                  >
+                    <div
+                      className={`h-full rounded-full transition-[width] duration-150 motion-reduce:transition-none ${
+                        petHpPercent > 50
+                          ? 'bg-emerald-500'
+                          : petHpPercent > 25
+                            ? 'bg-amber-500'
+                            : 'bg-red-500'
+                      }`}
+                      style={{ width: `${petHpPercent}%` }}
+                    />
+                  </div>
+                  {evolutionProgress !== null && (
+                    <div
+                      title={`Evolução: ${Math.floor(pet.age)}s/60s`}
+                      className="h-0.5 w-full overflow-hidden rounded-full bg-slate-800"
+                    >
+                      <div
+                        className="h-full rounded-full bg-amber-300 transition-[width] duration-200 motion-reduce:transition-none"
+                        style={{ width: `${evolutionProgress}%` }}
+                      />
+                    </div>
+                  )}
+                  {pet.evolved && (
+                    <span className="absolute -right-1 -top-1 rounded-full border border-emerald-300 bg-emerald-950 px-1 text-[8px] font-black text-emerald-200">
+                      EVO
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={onTogglePetStance}
+              title={`Postura: ${isAggressiveStance ? 'Agressivo' : 'Guarda'} (R para alternar)\nAgressivo: caça inimigos em toda a tela.\nGuarda: forma um círculo defensivo e prioriza quem se aproxima.`}
+              aria-label={`Alternar postura da matilha. Atual: ${isAggressiveStance ? 'Agressivo' : 'Guarda'}`}
+              className={`flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border bg-gradient-to-b from-slate-900 to-slate-950 px-1 py-1 text-center transition active:scale-95 ${
+                isAggressiveStance
+                  ? 'border-orange-500/80 text-orange-300 hover:border-orange-300'
+                  : 'border-sky-500/80 text-sky-300 hover:border-sky-300'
+              }`}
+            >
+              {isAggressiveStance ? <Swords className="h-6 w-6" /> : <Shield className="h-6 w-6" />}
+              <span className="text-[8px] font-black uppercase tracking-wide">
+                {isAggressiveStance ? 'Agressivo' : 'Guarda'}
+              </span>
+              <span className="text-[7px] font-bold text-slate-400">R</span>
+            </button>
+          </div>
+          <span className="pointer-events-none rounded-full bg-slate-950/80 px-2 py-0.5 text-[9px] font-semibold text-amber-200/90">
+            Alt + Clique Direito para libertar • R alterna a postura
+          </span>
+        </div>
+      )}
 
       {/* Bottom Hint for mobile/desktop */}
       <div className="flex justify-between items-end text-[10px] text-slate-400/80">

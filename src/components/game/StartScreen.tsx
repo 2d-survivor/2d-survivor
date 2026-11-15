@@ -442,7 +442,9 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {CHARACTERS.map((char, index) => {
                 const isSelected = selectedCharIndex === index;
-                const startingWeaponMeta = WEAPON_REGISTRY[char.startingWeapon];
+                const startingWeaponMeta = char.startingWeapon
+                  ? WEAPON_REGISTRY[char.startingWeapon]
+                  : undefined;
                 return (
                   <button
                     key={char.id}
@@ -494,11 +496,20 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
 
                     <div className="mt-4 flex items-center justify-between border-t border-[#383e4c] pt-3">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#9ca3af]">
-                        Arma Inicial:
+                        {char.startingWeapon ? 'Arma Inicial:' : 'Habilidade Nativa:'}
                       </span>
                       <div className="flex items-center gap-1 text-xs font-bold text-[#e5e7eb]">
-                        {renderWeaponIcon(char.startingWeapon, 'w-5 h-5')}
-                        <span>{startingWeaponMeta.name}</span>
+                        {char.startingWeapon && startingWeaponMeta ? (
+                          <>
+                            {renderWeaponIcon(char.startingWeapon, 'w-5 h-5')}
+                            <span>{startingWeaponMeta.name}</span>
+                          </>
+                        ) : (
+                          <>
+                            {renderNamedIcon('PawPrint', 'w-5 h-5')}
+                            <span>Aura de Doma</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </button>

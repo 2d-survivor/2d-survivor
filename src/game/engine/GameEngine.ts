@@ -8,6 +8,7 @@ import {
   MapId,
   MissionObjectivesHUD,
   AmazonMissionMetric,
+  PetUpgradeId,
   UpgradeOption,
   SavedGameData,
   WeaponId,
@@ -34,6 +35,7 @@ import { GorillaBoss } from '../entities/GorillaBoss';
 import { AnacondaBoss } from '../entities/AnacondaBoss';
 import { AnacondaNpc } from '../entities/AnacondaNpc';
 import { EquipmentDrop } from '../entities/EquipmentDrop';
+import { Pet, petAttackStyleFor } from '../entities/Pet';
 import { ANACONDA } from '../data/anaconda';
 import { GORILLA_ARENA, GORILLA_LEAP, GORILLA_ROAR, GORILLA_SLAM_DAMAGE_MULTIPLIER } from '../data/gorilla';
 import { KOPENAWAS } from '../data/kopenawa';
@@ -51,6 +53,7 @@ import {
   WorldSystem,
 } from '../systems/WorldProps';
 import { WEAPON_REGISTRY, PASSIVE_REGISTRY, AMAZON_STARTING_WEAPON_BY_CHARACTER } from '../data/upgrades';
+import { PET_UPGRADE_REGISTRY, PET_UPGRADE_IDS } from '../data/petUpgrades';
 import { saveGameData, loadSavedData } from '../data/persistence';
 import { getDifficulty } from '../data/difficulties';
 import { applyRunToMissions } from '../data/missions';
@@ -77,6 +80,21 @@ interface BossProjectile {
   life: number;
   maxLife: number;
   kind: 'fireball' | 'soundwave' | 'water' | 'sonic' | 'spore' | 'spirit' | 'bee';
+}
+
+interface PetProjectile {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  damage: number;
+  life: number;
+  maxLife: number;
+  color: string;
+  crit: boolean;
+  poisonDps?: number;
+  poisonDuration?: number;
 }
 
 interface BossHazard {
@@ -509,6 +527,21 @@ export class GameEngine {
   private itemSpawnTimer: number = 0;
   private processedEnemyDeaths = new WeakSet<Enemy>();
   private thornCooldowns = new WeakMap<Enemy, number>();
+  /** Domador de Feras: allied fauna and the enemies marked by Aura de Doma. */
+  private pets: Pet[] = [];
+  private petProjectiles: PetProjectile[] = [];
+  private petCritCounter = 0;
+  private petStance: 'aggressive' | 'guard' = 'aggressive';
+  private readonly petGuardRadius = 320;
+  private readonly petUpgradeLevels: Record<PetUpgradeId, number> = {
+    chamado_matilha: 0,
+    furia_selvagem: 0,
+    couraca_floresta: 0,
+    elo_vital: 0,
+    doma_rapida: 0,
+  };
+  private markedEnemyIds = new Set<number>();
+  private domaAuraTimer = 0.35;
   private missionSnapshot = { kills: 0, survivalSeconds: 0, goldCollected: 0, bossesDefeated: 0 };
   private amazonObjectives: AmazonObjectivesState = {
     fruitsCollected: 0,
@@ -580,9 +613,15 @@ export class GameEngine {
         : this.worldProps.resolvePlayerMovement(fromX, fromY, dx, dy, radius, airborne);
       return this.clampToGorillaArena(resolved.x, resolved.y, radius);
     });
+    const isBeastmaster = character.id === 'domador_feras';
     this.weaponSystem = new WeaponSystem(
-      AMAZON_STARTING_WEAPON_BY_CHARACTER[character.id] ?? 'garras_onca',
-      { maxWeaponSlots: 4, maxPassiveSlots: 4, maxItemLevel: 10 }
+      isBeastmaster ? null : AMAZON_STARTING_WEAPON_BY_CHARACTER[character.id] ?? 'garras_onca',
+      {
+        maxWeaponSlots: 4,
+        maxPassiveSlots: 4,
+        maxItemLevel: 10,
+        itemUpgradesEnabled: !isBeastmaster,
+      }
     );
     this.weaponSystem.recalculatePlayerStats(this.player);
     this.player.hp = this.player.maxHp;
@@ -596,6 +635,7 @@ export class GameEngine {
         this.togglePause();
       }
     };
+    this.input.onPetStanceToggle = () => this.togglePetStance();
   }
 
   public handleResize(): void {
@@ -1683,6 +1723,10 @@ export class GameEngine {
       (enemy) => this.onEnemyKilled(enemy)
     );
 
+    // 6.1. Domador de Feras native kit: aura marking and tamed companions.
+    this.updateBeastmasterAura(dt);
+    this.updatePets(dt);
+
     // 6.2. Resolve fruit foraging and predator feeds.
     this.resolveAmazonEcology();
 
@@ -1696,7 +1740,7 @@ export class GameEngine {
     // Credit kills immediately, then open at most one upgrade selection per frame.
     // Remaining levels are handled sequentially by applyUpgrade's overflow logic.
     if (!this.isPaused && !this.isGameOver && this.checkPlayerLevelUp()) {
-      const options = this.weaponSystem.generateUpgradeOptions();
+      const options = this.generateUpgradeOptions();
       if (options.length > 0) {
         this.sound.playLevelUp();
         this.pause();
@@ -2521,6 +2565,415 @@ export class GameEngine {
     return false;
   }
 
+  private isBeastmaster(): boolean {
+    return this.player.character.id === 'domador_feras';
+  }
+
+  /** Pack size grows from 2 to 8 with three Chamado da Matilha levels. */
+  private get petMaxSlots(): number {
+    return 2 + this.petUpgradeLevels.chamado_matilha * 2;
+  }
+
+  private get petDamageMultiplier(): number {
+    return 1 + this.petUpgradeLevels.furia_selvagem * 0.2;
+  }
+
+  private get petAttackSpeedMultiplier(): number {
+    return 1 + this.petUpgradeLevels.furia_selvagem * 0.2;
+  }
+
+  private get petHpMultiplier(): number {
+    return 1 + this.petUpgradeLevels.couraca_floresta * 0.25;
+  }
+
+  private get petArmor(): number {
+    return this.petUpgradeLevels.couraca_floresta * 2;
+  }
+
+  private get petRegenPercent(): number {
+    return this.petUpgradeLevels.elo_vital * 0.02;
+  }
+
+  /** Doma Rápida raises the HP ceiling from 40% to 65%. */
+  private get domaTameThreshold(): number {
+    return 0.4 + this.petUpgradeLevels.doma_rapida * 0.05;
+  }
+
+  /** Doma Rápida also widens the aura from 280 to 480 units. */
+  private get domaAuraRadius(): number {
+    return 280 + this.petUpgradeLevels.doma_rapida * 40;
+  }
+
+  private applyPetBonuses(pet: Pet): void {
+    pet.setDomadorBonuses(
+      this.petHpMultiplier,
+      this.petDamageMultiplier,
+      this.petArmor,
+      this.petRegenPercent
+    );
+  }
+
+  private refreshPetBonuses(): void {
+    for (let i = 0; i < this.pets.length; i++) this.applyPetBonuses(this.pets[i]);
+  }
+
+  /** Elo Vital: the pack heals the Domador for 1 HP every 10 critical hits. */
+  private registerPetCrit(): void {
+    if (this.petUpgradeLevels.elo_vital <= 0) return;
+    this.petCritCounter += 1;
+    if (this.petCritCounter < 10) return;
+    this.petCritCounter = 0;
+    this.player.heal(1);
+    this.vfx.addDamageNumber(this.player.x, this.player.y - 20, 1, false, true);
+  }
+
+  /** Exclusive level-up pool: only the five pack upgrades, never common items. */
+  private generateBeastmasterUpgradeOptions(): UpgradeOption[] {
+    const candidates: UpgradeOption[] = [];
+    for (let i = 0; i < PET_UPGRADE_IDS.length; i++) {
+      const id = PET_UPGRADE_IDS[i];
+      const level = this.petUpgradeLevels[id];
+      const meta = PET_UPGRADE_REGISTRY[id];
+      if (level >= meta.maxLevel) continue;
+      candidates.push({
+        type: 'pet',
+        id,
+        name: meta.name,
+        description: meta.levelDescriptions[level],
+        level: level + 1,
+        isNew: level === 0,
+        isPetUpgrade: true,
+        iconName: meta.iconName,
+      });
+    }
+
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    return candidates.slice(0, 3);
+  }
+
+  private generateUpgradeOptions(): UpgradeOption[] {
+    if (this.isBeastmaster()) return this.generateBeastmasterUpgradeOptions();
+    return this.weaponSystem.generateUpgradeOptions();
+  }
+
+  private petAttackCooldown(pet: Pet): number {
+    return pet.attackInterval / this.petAttackSpeedMultiplier;
+  }
+
+  /** Common fauna only: bosses, elites and illusory clones cannot be tamed. */
+  private canTame(enemy: Enemy): boolean {
+    return !enemy.isBoss && !enemy.isElite && !(enemy instanceof KopenawaClone);
+  }
+
+  /**
+   * Aura de Doma: a periodic spiritual pulse marks common fauna below the
+   * current HP threshold (40% base, up to 65% with Doma Rápida). A marked
+   * enemy that reaches 0 HP becomes a full-health ally pet.
+   */
+  private updateBeastmasterAura(dt: number): void {
+    if (!this.isBeastmaster()) return;
+
+    this.domaAuraTimer -= dt;
+    if (this.domaAuraTimer > 0) return;
+    this.domaAuraTimer = 1.1;
+
+    this.weaponSystem.spawnRingPulse(
+      this.player.x,
+      this.player.y,
+      this.domaAuraRadius,
+      '#fbbf24',
+      0.5
+    );
+    this.weaponSystem.spawnRingPulse(
+      this.player.x,
+      this.player.y,
+      this.domaAuraRadius * 0.68,
+      '#4ade80',
+      0.36
+    );
+
+    const aliveIds = new Set<number>();
+    for (let i = 0; i < this.enemies.length; i++) aliveIds.add(this.enemies[i].id);
+    for (const id of this.markedEnemyIds) {
+      if (!aliveIds.has(id)) this.markedEnemyIds.delete(id);
+    }
+
+    const radiusSq = this.domaAuraRadius * this.domaAuraRadius;
+    for (let i = 0; i < this.enemies.length; i++) {
+      const enemy = this.enemies[i];
+      if (enemy.hp <= 0 || enemy.isSubmerged || !this.canTame(enemy)) continue;
+      if (enemy.hp >= enemy.maxHp * this.domaTameThreshold) continue;
+      const dx = enemy.x - this.player.x;
+      const dy = enemy.y - this.player.y;
+      if (dx * dx + dy * dy > radiusSq) continue;
+      this.markedEnemyIds.add(enemy.id);
+    }
+  }
+
+  private updatePets(dt: number): void {
+    if (this.pets.length === 0 && this.petProjectiles.length === 0) return;
+
+    const aggressive = this.petStance === 'aggressive';
+    // Aggressive hunts anything on screen; Guard only reacts to threats near the hero.
+    const halfViewWidth = this.camera.viewportWidth / 2 + 80;
+    const halfViewHeight = this.camera.viewportHeight / 2 + 80;
+    const guardRadiusSq = this.petGuardRadius * this.petGuardRadius;
+    const petCount = this.pets.length;
+
+    for (let i = this.pets.length - 1; i >= 0; i--) {
+      const pet = this.pets[i];
+      pet.syncHeroLevel(this.player.level);
+
+      if (pet.tryEvolve(this.player.level)) {
+        this.vfx.addDeathBurst(pet.x, pet.y, '#34d399', 22);
+        this.vfx.addSparks(pet.x, pet.y, '#fbbf24', 14);
+        this.weaponSystem.spawnRingPulse(pet.x, pet.y, pet.radius * 3.4, '#34d399', 0.6);
+      }
+
+      let target: Enemy | null = null;
+      let bestDistSq = Infinity;
+      for (let j = 0; j < this.enemies.length; j++) {
+        const enemy = this.enemies[j];
+        if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+
+        if (aggressive) {
+          if (
+            Math.abs(enemy.x - this.camera.x) > halfViewWidth ||
+            Math.abs(enemy.y - this.camera.y) > halfViewHeight
+          ) {
+            continue;
+          }
+        } else {
+          const playerDx = enemy.x - this.player.x;
+          const playerDy = enemy.y - this.player.y;
+          if (playerDx * playerDx + playerDy * playerDy > guardRadiusSq) continue;
+        }
+
+        const dx = enemy.x - pet.x;
+        const dy = enemy.y - pet.y;
+        const distSq = dx * dx + dy * dy;
+        if (aggressive) {
+          if (distSq < bestDistSq) {
+            bestDistSq = distSq;
+            target = enemy;
+          }
+        } else {
+          // Guard prioritises whoever is closest to the Domador.
+          const playerDx = enemy.x - this.player.x;
+          const playerDy = enemy.y - this.player.y;
+          const playerDistSq = playerDx * playerDx + playerDy * playerDy;
+          if (playerDistSq < bestDistSq) {
+            bestDistSq = playerDistSq;
+            target = enemy;
+          }
+        }
+      }
+
+      if (!target) {
+        if (aggressive) {
+          const distToPlayer = Math.hypot(this.player.x - pet.x, this.player.y - pet.y);
+          if (distToPlayer > 90) pet.update(dt, this.player.x, this.player.y);
+          else pet.update(dt, null, null);
+        } else {
+          const slot = this.petGuardSlot(i, petCount);
+          pet.update(dt, slot.x, slot.y);
+        }
+        continue;
+      }
+
+      const targetDist = Math.hypot(target.x - pet.x, target.y - pet.y);
+      if (pet.attackStyle === 'ranged' && targetDist <= 260) {
+        // Ranged fauna keeps its distance and spits from afar.
+        pet.update(dt, null, null);
+      } else {
+        pet.update(dt, target.x, target.y);
+        if (this.damagePetOnContact(pet)) continue;
+      }
+
+      if (pet.attackTimer > 0) continue;
+
+      if (pet.attackStyle === 'ranged' && targetDist <= 340) {
+        pet.attackTimer = this.petAttackCooldown(pet);
+        this.firePetProjectile(pet, target);
+      } else if (pet.attackStyle !== 'ranged') {
+        const biteDist = pet.radius + target.radius + 10;
+        if (targetDist <= biteDist) {
+          pet.attackTimer = this.petAttackCooldown(pet);
+          this.petMeleeAttack(pet, target);
+        }
+      }
+    }
+
+    this.updatePetProjectiles(dt);
+  }
+
+  /** Defensive ring around the Domador de Feras, evenly spaced per slot. */
+  private petGuardSlot(index: number, total: number): { x: number; y: number } {
+    const ringRadius = 82;
+    const count = Math.max(1, total);
+    const angle = (Math.PI * 2 * index) / count - Math.PI / 2;
+    return {
+      x: this.player.x + Math.cos(angle) * ringRadius,
+      y: this.player.y + Math.sin(angle) * ringRadius,
+    };
+  }
+
+  /** R key or the HUD button swaps the pack between aggressive and guard. */
+  public togglePetStance(): void {
+    if (!this.isBeastmaster() || this.isGameOver) return;
+    this.petStance = this.petStance === 'aggressive' ? 'guard' : 'aggressive';
+    this.weaponSystem.spawnRingPulse(
+      this.player.x,
+      this.player.y,
+      90,
+      this.petStance === 'aggressive' ? '#f97316' : '#38bdf8',
+      0.45
+    );
+    this.vfx.addSparks(
+      this.player.x,
+      this.player.y,
+      this.petStance === 'aggressive' ? '#fb923c' : '#7dd3fc',
+      8
+    );
+    this.syncHUD();
+  }
+
+  /** Contact damage from hostile fauna. Returns true when the pet died. */
+  private damagePetOnContact(pet: Pet): boolean {
+    if (pet.contactTimer > 0) return false;
+    for (let i = 0; i < this.enemies.length; i++) {
+      const enemy = this.enemies[i];
+      if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+      const reach = pet.radius + enemy.radius;
+      const dx = enemy.x - pet.x;
+      const dy = enemy.y - pet.y;
+      if (dx * dx + dy * dy > reach * reach) continue;
+
+      pet.contactTimer = 1.2;
+      const rawDamage = Math.max(1, Math.round(enemy.damage * 0.5));
+      const damage = Math.max(1, rawDamage - pet.armor);
+      pet.hp -= damage;
+      this.vfx.addSparks(pet.x, pet.y, '#f87171', 4);
+      if (pet.hp <= 0) {
+        const index = this.pets.indexOf(pet);
+        if (index >= 0) this.pets.splice(index, 1);
+        this.vfx.addDeathBurst(pet.x, pet.y, '#4ade80', 14);
+        this.vfx.addSparks(pet.x, pet.y, '#fbbf24', 6);
+        this.syncHUD();
+        return true;
+      }
+      return false;
+    }
+    return false;
+  }
+
+  private petMeleeAttack(pet: Pet, target: Enemy): void {
+    const dx = target.x - pet.x;
+    const dy = target.y - pet.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const isCharge = pet.attackStyle === 'charge';
+    const isCrit = Math.random() < this.player.critChance;
+    const critMultiplier = isCrit ? this.player.critMultiplier : 1;
+    const rawDamage = pet.damage * (isCharge ? 1.35 : 1) * critMultiplier;
+    const damage = target.computeDamageTaken(rawDamage, this.player.debuffDamageBonus);
+    const dead = target.takeDamage(
+      damage,
+      dx / dist,
+      dy / dist,
+      isCharge ? 260 : pet.attackStyle === 'venom' ? 70 : 90
+    );
+    this.vfx.addDamageNumber(target.x, target.y - 6, damage, isCrit);
+    this.vfx.addSparks(target.x, target.y, pet.attackColor, isCharge ? 8 : 4);
+    if (isCrit) this.registerPetCrit();
+
+    if (isCharge) {
+      this.weaponSystem.spawnRingPulse(target.x, target.y, 34, pet.attackColor, 0.24);
+    }
+    if (pet.attackStyle === 'venom') {
+      target.applyPoison(
+        pet.damage * 0.4,
+        2.8,
+        'mordida_piranha',
+        false
+      );
+    }
+
+    if (dead) this.onEnemyKilled(target);
+  }
+
+  private firePetProjectile(pet: Pet, target: Enemy): void {
+    const dx = target.x - pet.x;
+    const dy = target.y - pet.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const speed = 430;
+    const poison = pet.type === 'poison_dart_frog' || pet.attackStyle === 'venom';
+    const isCrit = Math.random() < this.player.critChance;
+    const critMultiplier = isCrit ? this.player.critMultiplier : 1;
+    this.petProjectiles.push({
+      x: pet.x,
+      y: pet.y - pet.radius * 0.4,
+      vx: (dx / dist) * speed,
+      vy: (dy / dist) * speed,
+      radius: poison ? 6 : 7,
+      damage: pet.damage * critMultiplier,
+      crit: isCrit,
+      life: 1.4,
+      maxLife: 1.4,
+      color: pet.attackColor,
+      poisonDps: poison ? pet.damage * 0.35 : undefined,
+      poisonDuration: poison ? 2.6 : undefined,
+    });
+    this.vfx.addSparks(pet.x, pet.y, pet.attackColor, 3);
+  }
+
+  private updatePetProjectiles(dt: number): void {
+    for (let i = this.petProjectiles.length - 1; i >= 0; i--) {
+      const p = this.petProjectiles[i];
+      p.life -= dt;
+      if (p.life <= 0) {
+        this.petProjectiles.splice(i, 1);
+        continue;
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+
+      let hit = false;
+      for (let j = 0; j < this.enemies.length; j++) {
+        const enemy = this.enemies[j];
+        if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+        const dx = enemy.x - p.x;
+        const dy = enemy.y - p.y;
+        if (dx * dx + dy * dy > (p.radius + enemy.radius) * (p.radius + enemy.radius)) continue;
+
+        const damage = enemy.computeDamageTaken(p.damage, this.player.debuffDamageBonus);
+        const dist = Math.hypot(dx, dy) || 1;
+        const dead = enemy.takeDamage(damage, dx / dist, dy / dist, 80);
+        this.vfx.addDamageNumber(enemy.x, enemy.y - 6, damage, p.crit);
+        this.vfx.addSparks(enemy.x, enemy.y, p.color, 4);
+        if (p.crit) this.registerPetCrit();
+        if (p.poisonDps && p.poisonDuration) {
+          enemy.applyPoison(p.poisonDps, p.poisonDuration, 'mordida_piranha', false);
+        }
+        if (dead) this.onEnemyKilled(enemy);
+        hit = true;
+        break;
+      }
+      if (hit) this.petProjectiles.splice(i, 1);
+    }
+  }
+
+  /** Alt + right-click on the HUD pet slot releases that companion. */
+  public releasePet(index: number): void {
+    if (index < 0 || index >= this.pets.length) return;
+    const [pet] = this.pets.splice(index, 1);
+    this.vfx.addSparks(pet.x, pet.y, '#fbbf24', 10);
+    this.vfx.addDeathBurst(pet.x, pet.y, '#4ade80', 12);
+    this.syncHUD();
+  }
+
   private onEnemyKilled(enemy: Enemy): void {
     if (this.processedEnemyDeaths.has(enemy)) return;
     this.processedEnemyDeaths.add(enemy);
@@ -2528,6 +2981,28 @@ export class GameEngine {
     if (enemy instanceof KopenawaClone) {
       this.vfx.addDeathBurst(enemy.x, enemy.y, '#c4b5fd', 18);
       return;
+    }
+
+    // Aura de Doma: a marked creature is tamed instead of staying dead.
+    if (this.isBeastmaster()) {
+      const wasMarked = this.markedEnemyIds.delete(enemy.id);
+      if (wasMarked && this.canTame(enemy) && this.pets.length < this.petMaxSlots) {
+        const pet = new Pet(
+          enemy.x,
+          enemy.y,
+          enemy.type,
+          enemy.name || 'Fera',
+          Math.max(30, enemy.maxHp * 0.55),
+          10,
+          petAttackStyleFor(enemy.type)
+        );
+        pet.syncHeroLevel(this.player.level);
+        this.applyPetBonuses(pet);
+        this.pets.push(pet);
+        this.vfx.addDeathBurst(enemy.x, enemy.y, '#4ade80', 16);
+        this.vfx.addSparks(enemy.x, enemy.y, '#fbbf24', 10);
+        this.weaponSystem.spawnRingPulse(enemy.x, enemy.y, 54, '#fbbf24', 0.4);
+      }
     }
 
     if (this.tribeHunter && canDropHunterFish(this.hunterQuest, enemy, this.worldProps.isMainRiverWater(enemy.x, enemy.y))) {
@@ -2649,7 +3124,7 @@ export class GameEngine {
       if (leveledUp) this.weaponSystem.recalculatePlayerStats(this.player);
 
       if (leveledUp) {
-        const options = this.weaponSystem.generateUpgradeOptions();
+        const options = this.generateUpgradeOptions();
         if (options.length > 0) {
           this.sound.playLevelUp();
           this.pause();
@@ -2798,9 +3273,9 @@ export class GameEngine {
   public rerollLevelUp(current: UpgradeOption[]): { options: UpgradeOption[]; remaining: number } | null {
     if (!this.isPaused || this.isGameOver || this.levelUpRerollsRemaining <= 0) return null;
     const key = (options: UpgradeOption[]) => options.map(option => option.type + ':' + option.id).sort().join('|');
-    let options = this.weaponSystem.generateUpgradeOptions();
+    let options = this.generateUpgradeOptions();
     for (let attempt = 0; attempt < 8 && key(options) === key(current); attempt++) {
-      options = this.weaponSystem.generateUpgradeOptions();
+      options = this.generateUpgradeOptions();
     }
     if (options.length === 0) return null;
     this.levelUpRerollsRemaining--;
@@ -2830,11 +3305,22 @@ export class GameEngine {
     } else if (option.type === 'passive') {
       const pId = option.id as PassiveId;
       this.weaponSystem.addPassive(pId, this.player);
+    } else if (option.type === 'pet') {
+      const petUpgradeId = option.id as PetUpgradeId;
+      const definition = PET_UPGRADE_REGISTRY[petUpgradeId];
+      if (definition) {
+        this.petUpgradeLevels[petUpgradeId] = Math.min(
+          definition.maxLevel,
+          this.petUpgradeLevels[petUpgradeId] + 1
+        );
+        this.refreshPetBonuses();
+        this.syncHUD();
+      }
     }
 
     // Handle multi-level overflow XP (e.g. Boss gem)
     if (this.checkPlayerLevelUp()) {
-      const nextOptions = this.weaponSystem.generateUpgradeOptions();
+      const nextOptions = this.generateUpgradeOptions();
       if (nextOptions.length > 0) {
         this.sound.playLevelUp();
         this.pause();
@@ -2966,6 +3452,16 @@ export class GameEngine {
       name: PASSIVE_REGISTRY[p.id].name,
     }));
 
+    const petsList = this.pets.map((pet, index) => ({
+      id: index,
+      type: pet.type as EnemyType,
+      name: pet.name,
+      hp: Math.max(0, Math.round(pet.hp)),
+      maxHp: Math.round(pet.maxHp),
+      evolved: pet.evolved,
+      age: pet.age,
+    }));
+
     const activeBoss = this.waveDirector.bossActive
       ? {
           name: this.waveDirector.bossActive.name,
@@ -2990,6 +3486,8 @@ export class GameEngine {
       gold: this.goldCollected,
       weapons: weaponsList,
       passives: passivesList,
+      pets: petsList,
+      petStance: this.petStance,
       activeBoss,
       eventAlert: this.waveDirector.eventAlert || undefined,
       objectives: this.buildObjectivesHUD(),
@@ -3042,6 +3540,31 @@ export class GameEngine {
       this.enemies[i].render(ctx, camera);
     }
 
+    // Aura de Doma marks show as a pulsing golden ring under the target.
+    if (this.markedEnemyIds.size > 0) {
+      for (let i = 0; i < this.enemies.length; i++) {
+        const enemy = this.enemies[i];
+        if (!this.markedEnemyIds.has(enemy.id)) continue;
+        const screen = camera.worldToScreen(enemy.x, enemy.y);
+        const pulse = 0.6 + Math.sin(this.waveDirector.survivalTime * 5 + enemy.id) * 0.25;
+        ctx.save();
+        ctx.strokeStyle = `rgba(251, 191, 36, ${pulse})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(
+          screen.x,
+          screen.y + enemy.radius * 0.75,
+          enemy.radius * 1.35,
+          enemy.radius * 0.5,
+          0,
+          0,
+          Math.PI * 2
+        );
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     // Match the player's depth at the NPC's feet without adding it to combat.
     if (this.tribeHunter && this.player.y >= this.tribeHunter.y) this.tribeHunter.render(ctx, camera, this.hunterQuest.completed);
     if (this.anacondaAvailable && this.anacondaNpc && this.player.y >= this.anacondaNpc.y) this.anacondaNpc.render(ctx, camera);
@@ -3050,6 +3573,28 @@ export class GameEngine {
     }
     if (this.kopenawaAvailable && this.kopenawaNpc && this.player.y >= this.kopenawaNpc.y) this.kopenawaNpc.render(ctx, camera);
     this.player.render(ctx, camera);
+    for (let i = 0; i < this.pets.length; i++) {
+      this.pets[i].render(ctx, camera);
+    }
+    for (let i = 0; i < this.petProjectiles.length; i++) {
+      const shot = this.petProjectiles[i];
+      if (!camera.isInView(shot.x, shot.y, 24)) continue;
+      const screen = camera.worldToScreen(shot.x, shot.y);
+      const fade = Math.min(1, shot.life / 0.35);
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.shadowColor = shot.color;
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = shot.color;
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, shot.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.arc(screen.x - shot.radius * 0.25, screen.y - shot.radius * 0.25, shot.radius * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     if (this.anacondaAvailable && this.anacondaNpc && this.player.y < this.anacondaNpc.y) this.anacondaNpc.render(ctx, camera);
     if (this.tribeHunter && this.player.y < this.tribeHunter.y) this.tribeHunter.render(ctx, camera, this.hunterQuest.completed);
     if (this.kopenawaAvailable && this.kopenawaNpc && this.player.y < this.kopenawaNpc.y) this.kopenawaNpc.render(ctx, camera);
@@ -4357,7 +4902,7 @@ export class GameEngine {
     const needed = Math.max(1, this.player.xpToNextLevel - this.player.xp);
     this.player.addXp(needed);
     this.weaponSystem.recalculatePlayerStats(this.player);
-    const options = this.weaponSystem.generateUpgradeOptions();
+    const options = this.generateUpgradeOptions();
     if (options.length > 0) {
       this.sound.playLevelUp();
       this.pause();

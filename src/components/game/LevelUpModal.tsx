@@ -13,6 +13,7 @@ interface LevelUpModalProps {
 }
 
 export const LevelUpModal: React.FC<LevelUpModalProps> = ({ options, onSelect, onReroll, rerollsRemaining }) => {
+  const isPetLevelUp = options.length > 0 && options.every((option) => option.type === 'pet');
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === '1' && options[0]) onSelect(options[0]);
@@ -36,7 +37,9 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({ options, onSelect, o
         </div>
 
         <p className="text-slate-400 text-xs sm:text-sm mt-4 mb-5 text-center">
-          Escolha uma arma ou passivo para compor sua sinergia de evolução:
+          {isPetLevelUp
+            ? 'Escolha uma melhoria exclusiva para a sua matilha:'
+            : 'Escolha uma arma ou passivo para compor sua sinergia de evolução:'}
         </p>
 
         {/* Upgrade Cards Grid */}
@@ -53,9 +56,11 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({ options, onSelect, o
                     ? 'bg-gradient-to-r from-amber-950/90 via-slate-900 to-emerald-950/80 border-yellow-300 hover:border-yellow-200 shadow-lg shadow-amber-500/30'
                     : isEvolution
                       ? 'bg-gradient-to-r from-purple-950/80 via-slate-900 to-rose-950/80 border-amber-400 hover:border-amber-300 shadow-lg shadow-purple-500/20'
-                      : opt.hasSynergyOwned
-                      ? 'bg-slate-900/95 hover:bg-slate-850 border-emerald-500/70 hover:border-amber-400 shadow-md shadow-emerald-500/10'
-                      : 'bg-slate-900/90 hover:bg-slate-850 border-slate-700/80 hover:border-amber-500/80 shadow-md'
+                      : opt.type === 'pet'
+                        ? 'bg-gradient-to-r from-emerald-950/80 via-slate-900 to-slate-950 border-emerald-500/80 hover:border-emerald-300 shadow-md shadow-emerald-500/20'
+                        : opt.hasSynergyOwned
+                          ? 'bg-slate-900/95 hover:bg-slate-850 border-emerald-500/70 hover:border-amber-400 shadow-md shadow-emerald-500/10'
+                          : 'bg-slate-900/90 hover:bg-slate-850 border-slate-700/80 hover:border-amber-500/80 shadow-md'
                 }`}
               >
                 {/* Keyboard shortcut badge */}
@@ -93,8 +98,12 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({ options, onSelect, o
                         🔥 EVOLUÇÃO!
                       </span>
                     ) : opt.isNew ? (
-                      <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-                        {opt.type === 'weapon' ? 'NOVA ARMA' : 'NOVO PASSIVO'}
+                      <span className={`text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${opt.type === 'pet' ? 'bg-emerald-600' : 'bg-blue-600'}`}>
+                        {opt.type === 'pet' ? 'NOVO DOMÍNIO' : opt.type === 'weapon' ? 'NOVA ARMA' : 'NOVO PASSIVO'}
+                      </span>
+                    ) : opt.type === 'pet' ? (
+                      <span className="bg-emerald-950 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-700">
+                        Aprimoramento {opt.level}
                       </span>
                     ) : (
                       <span className="bg-slate-800 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-700">
@@ -135,9 +144,15 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({ options, onSelect, o
           Rerrolar ({rerollsRemaining}/2)
         </button>
         <div className="mt-4 text-slate-500 text-[11px] text-center">
-          Pressione <span className="text-amber-400 font-mono">[1]</span>,{' '}
-          <span className="text-amber-400 font-mono">[2]</span> ou{' '}
-          <span className="text-amber-400 font-mono">[3]</span> no teclado • Evoluções ocorrem nos Baús de Elite • Fusões Supremas exigem dois itens no Nível 10
+          {isPetLevelUp
+            ? 'Melhorias exclusivas do Domador de Feras — cada uma evolui até o nível máximo'
+            : (
+              <>
+                Pressione <span className="text-amber-400 font-mono">[1]</span>,{' '}
+                <span className="text-amber-400 font-mono">[2]</span> ou{' '}
+                <span className="text-amber-400 font-mono">[3]</span> no teclado • Evoluções ocorrem nos Baús de Elite • Fusões Supremas exigem dois itens no Nível 10
+              </>
+            )}
         </div>
       </div>
     </div>

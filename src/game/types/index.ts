@@ -87,6 +87,14 @@ export type PassiveId =
   | 'bio_shield'
   | AmazonPassiveId;
 
+/** Level-up cards exclusive to the Domador de Feras' tamed pack. */
+export type PetUpgradeId =
+  | 'chamado_matilha'
+  | 'furia_selvagem'
+  | 'couraca_floresta'
+  | 'elo_vital'
+  | 'doma_rapida';
+
 export interface WeaponInstance {
   id: WeaponId;
   evolvedId?: EvolvedWeaponId;
@@ -109,7 +117,8 @@ export interface CharacterConfig {
   name: string;
   title: string;
   description: string;
-  startingWeapon: WeaponId;
+  /** Omitted by heroes whose kit is a native ability instead of a weapon. */
+  startingWeapon?: WeaponId;
   iconName: string;
   color: string;
   portraitColor: string;
@@ -145,8 +154,8 @@ export interface CharacterConfig {
 }
 
 export interface UpgradeOption {
-  type: 'weapon' | 'passive' | 'evolution' | 'fusion';
-  id: WeaponId | PassiveId | EvolvedWeaponId;
+  type: 'weapon' | 'passive' | 'evolution' | 'fusion' | 'pet';
+  id: WeaponId | PassiveId | EvolvedWeaponId | PetUpgradeId;
   baseId?: WeaponId;
   fusionPassiveId?: PassiveId;
   name: string;
@@ -155,6 +164,8 @@ export interface UpgradeOption {
   isNew: boolean;
   isEvolution?: boolean;
   isFusion?: boolean;
+  /** Pet-only cards (Domador de Feras). */
+  isPetUpgrade?: boolean;
   synergyWith?: string;
   hasSynergyOwned?: boolean;
   iconName: string;
@@ -366,6 +377,17 @@ export interface HUDState {
     level: number;
     name: string;
   }[];
+  pets?: {
+    id: number;
+    type: EnemyType;
+    name: string;
+    hp: number;
+    maxHp: number;
+    evolved: boolean;
+    age: number;
+  }[];
+  /** Domador de Feras pack behaviour, toggled with R or the HUD button. */
+  petStance?: 'aggressive' | 'guard';
   activeBoss?: {
     name: string;
     hp: number;

@@ -32,6 +32,8 @@ export class InputManager {
 
   public onPauseToggle?: () => void;
   public onOptionSelect?: (index: number) => void;
+  /** Domador de Feras: R toggles the pack between Aggressive and Guard. */
+  public onPetStanceToggle?: () => void;
 
   constructor() {
     this.boundKeyDown = this.handleKeyDown.bind(this);
@@ -61,6 +63,9 @@ export class InputManager {
 
     if (e.code === 'Escape' || e.code === 'KeyP') {
       this.onPauseToggle?.();
+    }
+    if (e.code === 'KeyR' && !wasPressed) {
+      this.onPetStanceToggle?.();
     }
     if (e.code === 'Digit1') this.onOptionSelect?.(0);
     if (e.code === 'Digit2') this.onOptionSelect?.(1);
