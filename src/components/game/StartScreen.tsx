@@ -237,7 +237,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
             <Flame className="h-3 w-3 text-[#ff6b4a]" />
             <span>Sobrevivência Roguelike</span>
           </div>
-          <h1 className="gothic-title text-3xl sm:text-5xl">Sobreviventes da Horda</h1>
+          <h1 className="gothic-title text-3xl sm:text-5xl">Survivors</h1>
           <p className="mx-auto mt-2 max-w-lg text-xs leading-relaxed text-[#9ca3af] sm:text-sm">
             Escolha seu herói, enfrente ondas implacáveis de monstros, evolua suas armas e resista até o fim da jornada!
           </p>
