@@ -21,6 +21,8 @@ import {
   PawPrint,
   Lock,
   Unlock,
+  Minus,
+  Plus,
   Shield,
   Swords,
 } from 'lucide-react';
@@ -83,10 +85,12 @@ export const HUD: React.FC<HUDProps> = ({
   const isAggressiveStance = petStance === 'aggressive';
   const tameSpecies = hud.tameSpecies;
   const hasTameBar = !!tameSpecies && tameSpecies.length > 0;
+  const [domaOpen, setDomaOpen] = React.useState(true);
+  const domaExpanded = hasTameBar && domaOpen;
   const unlockedSpeciesCount = tameSpecies ? tameSpecies.filter((species) => species.unlocked).length : 0;
   const petSlots = hud.petSlots ?? hud.pets?.length ?? 0;
-  const petBarOffset = hasTameBar ? 'bottom-[16.5rem]' : 'bottom-[6.5rem]';
-  const questPanelOffset = hasTameBar ? 'bottom-[22rem]' : 'bottom-[11.5rem]';
+  const petBarOffset = domaExpanded ? 'bottom-[16.5rem]' : 'bottom-[6.5rem]';
+  const questPanelOffset = domaExpanded ? 'bottom-[22rem]' : 'bottom-[11.5rem]';
   const nativeWeapon = hud.nativeWeapon;
   const attackCount = Math.min(4, hud.weapons.length + (nativeWeapon ? 1 : 0));
 
@@ -302,16 +306,27 @@ export const HUD: React.FC<HUDProps> = ({
 
       {/* Bottom bar: three special ability slots */}
       <div className="flex flex-col gap-1">
-        {/* Doma bar: Domador de Feras species filter. All blocked until picked. */}
-        {hasTameBar && (
+        {/* Doma bar: Domador de Feras species filter. Collapsible next to the minimap. */}
+        {domaExpanded && (
           <div className="pointer-events-auto mx-auto flex w-full max-w-[min(96vw,48rem)] flex-col gap-1 rounded-xl border border-amber-700/60 bg-slate-950/90 px-2 py-1.5 shadow-2xl backdrop-blur-md">
             <div className="flex items-center justify-between gap-2 px-0.5">
               <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-200">
                 <PawPrint className="h-3 w-3 text-amber-300" />
                 Doma — espécies liberadas
               </span>
-              <span className="whitespace-nowrap text-[9px] font-bold text-amber-100/70">
-                {unlockedSpeciesCount}/{tameSpecies.length} • Matilha {hud.pets?.length ?? 0}/{petSlots}
+              <span className="flex items-center gap-1.5">
+                <span className="whitespace-nowrap text-[9px] font-bold text-amber-100/70">
+                  {unlockedSpeciesCount}/{tameSpecies.length} • Matilha {hud.pets?.length ?? 0}/{petSlots}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDomaOpen(false)}
+                  title="Recolher a doma para o lado do minimapa"
+                  aria-label="Recolher painel de doma"
+                  className="flex h-4 w-5 cursor-pointer items-center justify-center rounded border border-amber-700/70 bg-slate-900 text-amber-200 transition hover:border-amber-400 hover:text-amber-100 active:scale-95"
+                >
+                  <Minus className="h-3 w-3" />
+                </button>
               </span>
             </div>
             {unlockedSpeciesCount === 0 && (
@@ -348,6 +363,24 @@ export const HUD: React.FC<HUDProps> = ({
               ))}
             </div>
           </div>
+        )}
+        {/* Collapsed doma: compact tab beside the minimap, with "+" to reopen. */}
+        {hasTameBar && !domaOpen && (
+          <button
+            type="button"
+            onClick={() => setDomaOpen(true)}
+            title={`Abrir doma — ${unlockedSpeciesCount}/${tameSpecies.length} espécies liberadas\nMatilha ${hud.pets?.length ?? 0}/${petSlots}`}
+            aria-label="Abrir painel de doma"
+            className={`pointer-events-auto absolute bottom-8 left-[20.5rem] z-20 flex h-11 w-11 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg border bg-slate-950/90 shadow-lg backdrop-blur-md transition hover:border-amber-400 active:scale-95 max-sm:left-[15.5rem] ${unlockedSpeciesCount === 0
+              ? 'animate-pulse border-amber-500 text-amber-200'
+              : 'border-amber-700/70 text-amber-100'
+              }`}
+          >
+            <Plus className="h-4 w-4" />
+            <span className="text-[7px] font-black leading-none">
+              {unlockedSpeciesCount}/{tameSpecies.length}
+            </span>
+          </button>
         )}
         <div className="flex justify-center gap-2">
           {specialSlots.map((slot, index) => {
