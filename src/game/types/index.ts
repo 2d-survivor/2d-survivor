@@ -112,6 +112,13 @@ export interface PassiveInstance {
   maxLevel: number;
 }
 
+/** Fixed hero-exclusive weapon that lives outside the common item/fusion pools. */
+export interface NativeWeaponConfig {
+  name: string;
+  description: string;
+  iconName: string;
+}
+
 export interface CharacterConfig {
   id: string;
   name: string;
@@ -119,6 +126,8 @@ export interface CharacterConfig {
   description: string;
   /** Omitted by heroes whose kit is a native ability instead of a weapon. */
   startingWeapon?: WeaponId;
+  /** Fixed hero-exclusive weapon handled by the engine, outside the item pools. */
+  nativeWeapon?: NativeWeaponConfig;
   iconName: string;
   color: string;
   portraitColor: string;
@@ -406,6 +415,11 @@ export interface HUDState {
   }[];
   /** Domador de Feras pack behaviour, toggled with R or the HUD button. */
   petStance?: 'aggressive' | 'guard';
+  /** Fixed hero-exclusive weapon shown in the attacks panel. */
+  nativeWeapon?: {
+    name: string;
+    iconName: string;
+  };
   activeBoss?: {
     name: string;
     hp: number;

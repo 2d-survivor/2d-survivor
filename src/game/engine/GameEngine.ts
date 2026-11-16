@@ -58,6 +58,7 @@ import {
 } from '../systems/WorldProps';
 import { WEAPON_REGISTRY, PASSIVE_REGISTRY, AMAZON_STARTING_WEAPON_BY_CHARACTER } from '../data/upgrades';
 import { PET_UPGRADE_REGISTRY, PET_UPGRADE_IDS } from '../data/petUpgrades';
+import { ZARABATANA_STATS } from '../data/zarabatana';
 import { saveGameData, loadSavedData } from '../data/persistence';
 import { getDifficulty } from '../data/difficulties';
 import { applyRunToMissions } from '../data/missions';
@@ -99,6 +100,16 @@ interface PetProjectile {
   crit: boolean;
   poisonDps?: number;
   poisonDuration?: number;
+}
+
+/** Zarabatana Tranquilizante dart: single-target, slows and can capture. */
+interface TranquilizerDart {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  damage: number;
+  life: number;
 }
 
 interface BossHazard {
@@ -441,6 +452,8 @@ export class GameEngine {
   /** Domador de Feras: allied fauna and the enemies marked by Aura de Doma. */
   private pets: Pet[] = [];
   private petProjectiles: PetProjectile[] = [];
+  private tranquilizerDarts: TranquilizerDart[] = [];
+  private zarabatanaTimer = 0.5;
   private petCritCounter = 0;
   private petStance: 'aggressive' | 'guard' = 'aggressive';
   private readonly petGuardRadius = 320;
@@ -1800,6 +1813,7 @@ export class GameEngine {
 
     // 6.1. Domador de Feras native kit: aura marking and tamed companions.
     this.updateBeastmasterAura(dt);
+    this.updateZarabatana(dt);
     this.updatePets(dt);
 
     // 6.2. Resolve fruit foraging and predator feeds.
@@ -2673,15 +2687,109 @@ export class GameEngine {
     }
   }
 
+  /** Fixed Beastmaster weapon: auto-fires tranquilizer darts outside the item pools. */
+  private updateZarabatana(dt: number): void {
+    if (!this.isBeastmaster()) return;
+
+    this.zarabatanaTimer -= dt;
+    if (this.zarabatanaTimer <= 0) {
+      let target: Enemy | null = null;
+      let bestDistSq = ZARABATANA_STATS.range * ZARABATANA_STATS.range;
+      for (let i = 0; i < this.enemies.length; i++) {
+        const enemy = this.enemies[i];
+        if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+        const dx = enemy.x - this.player.x;
+        const dy = enemy.y - this.player.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < bestDistSq) {
+          bestDistSq = distSq;
+          target = enemy;
+        }
+      }
+
+      if (target) {
+        this.zarabatanaTimer =
+          ZARABATANA_STATS.baseCooldown * Math.max(0.45, 1 - this.player.cooldownReduction);
+        this.fireTranquilizerDart(target);
+      } else {
+        // Retry soon instead of waiting a full cadence without targets.
+        this.zarabatanaTimer = 0.15;
+      }
+    }
+
+    this.updateTranquilizerDarts(dt);
+  }
+
+  private fireTranquilizerDart(target: Enemy): void {
+    const dx = target.x - this.player.x;
+    const dy = target.y - this.player.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const levelMultiplier =
+      1 + Math.max(0, this.player.level - 1) * ZARABATANA_STATS.damagePerHeroLevel;
+    const damage = target.computeDamageTaken(
+      ZARABATANA_STATS.baseDamage * levelMultiplier * this.player.might,
+      this.player.debuffDamageBonus
+    );
+    this.tranquilizerDarts.push({
+      x: this.player.x,
+      y: this.player.y - this.player.radius * 0.35,
+      vx: (dx / dist) * ZARABATANA_STATS.projectileSpeed,
+      vy: (dy / dist) * ZARABATANA_STATS.projectileSpeed,
+      damage,
+      life: ZARABATANA_STATS.projectileLife,
+    });
+    this.vfx.addSparks(this.player.x, this.player.y - 8, '#fde68a', 2);
+  }
+
+  private updateTranquilizerDarts(dt: number): void {
+    for (let i = this.tranquilizerDarts.length - 1; i >= 0; i--) {
+      const dart = this.tranquilizerDarts[i];
+      dart.life -= dt;
+      if (dart.life <= 0) {
+        this.tranquilizerDarts.splice(i, 1);
+        continue;
+      }
+      dart.x += dart.vx * dt;
+      dart.y += dart.vy * dt;
+
+      let hit = false;
+      for (let j = 0; j < this.enemies.length; j++) {
+        const enemy = this.enemies[j];
+        if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+        const dx = enemy.x - dart.x;
+        const dy = enemy.y - dart.y;
+        const reach = ZARABATANA_STATS.projectileRadius + enemy.radius;
+        if (dx * dx + dy * dy > reach * reach) continue;
+
+        // Capture protection: a marked creature with a free slot is tamed, never killed.
+        if (this.captureMarkedEnemy(enemy)) {
+          const index = this.enemies.indexOf(enemy);
+          if (index >= 0) this.enemies.splice(index, 1);
+          hit = true;
+          break;
+        }
+
+        const dist = Math.hypot(dx, dy) || 1;
+        const dead = enemy.takeDamage(dart.damage, dx / dist, dy / dist, 60);
+        enemy.applySlow(ZARABATANA_STATS.slowFactor, ZARABATANA_STATS.slowDuration);
+        this.vfx.addDamageNumber(enemy.x, enemy.y - 6, dart.damage, false);
+        this.vfx.addSparks(enemy.x, enemy.y, '#fde68a', 3);
+        if (dead) this.onEnemyKilled(enemy);
+        hit = true;
+        break;
+      }
+      if (hit) this.tranquilizerDarts.splice(i, 1);
+    }
+  }
+
   private updatePets(dt: number): void {
     if (this.pets.length === 0 && this.petProjectiles.length === 0) return;
 
     const aggressive = this.petStance === 'aggressive';
-    // Aggressive hunts anything on screen; Guard only reacts to threats near the hero.
-    const halfViewWidth = this.camera.viewportWidth / 2 + 80;
-    const halfViewHeight = this.camera.viewportHeight / 2 + 80;
-    const guardRadiusSq = this.petGuardRadius * this.petGuardRadius;
     const petCount = this.pets.length;
+    // Enemies already focused by a packmate this frame. Bosses are never
+    // reserved, so the pack can still gang up on wave chiefs and guardians.
+    const claimedTargets = new Set<Enemy>();
 
     for (let i = this.pets.length - 1; i >= 0; i--) {
       const pet = this.pets[i];
@@ -2693,44 +2801,7 @@ export class GameEngine {
         this.weaponSystem.spawnRingPulse(pet.x, pet.y, pet.radius * 3.4, '#34d399', 0.6);
       }
 
-      let target: Enemy | null = null;
-      let bestDistSq = Infinity;
-      for (let j = 0; j < this.enemies.length; j++) {
-        const enemy = this.enemies[j];
-        if (enemy.hp <= 0 || enemy.isSubmerged) continue;
-
-        if (aggressive) {
-          if (
-            Math.abs(enemy.x - this.camera.x) > halfViewWidth ||
-            Math.abs(enemy.y - this.camera.y) > halfViewHeight
-          ) {
-            continue;
-          }
-        } else {
-          const playerDx = enemy.x - this.player.x;
-          const playerDy = enemy.y - this.player.y;
-          if (playerDx * playerDx + playerDy * playerDy > guardRadiusSq) continue;
-        }
-
-        const dx = enemy.x - pet.x;
-        const dy = enemy.y - pet.y;
-        const distSq = dx * dx + dy * dy;
-        if (aggressive) {
-          if (distSq < bestDistSq) {
-            bestDistSq = distSq;
-            target = enemy;
-          }
-        } else {
-          // Guard prioritises whoever is closest to the Domador.
-          const playerDx = enemy.x - this.player.x;
-          const playerDy = enemy.y - this.player.y;
-          const playerDistSq = playerDx * playerDx + playerDy * playerDy;
-          if (playerDistSq < bestDistSq) {
-            bestDistSq = playerDistSq;
-            target = enemy;
-          }
-        }
-      }
+      const target = this.selectPetTarget(pet, claimedTargets, aggressive);
 
       if (!target) {
         if (aggressive) {
@@ -2768,6 +2839,69 @@ export class GameEngine {
     }
 
     this.updatePetProjectiles(dt);
+  }
+
+  /**
+   * Pack target distribution. Each pet picks the nearest target that no
+   * packmate is already focusing, so the pack spreads over the swarm instead
+   * of stacking on one creature. Bosses stay shareable, and when every enemy
+   * in reach is already claimed (or there is only one) the pet joins the pile
+   * on the closest one instead of idling.
+   */
+  private selectPetTarget(
+    pet: Pet,
+    claimed: Set<Enemy>,
+    aggressive: boolean
+  ): Enemy | null {
+    let freeTarget: Enemy | null = null;
+    let freeDistSq = Infinity;
+    let anyTarget: Enemy | null = null;
+    let anyDistSq = Infinity;
+
+    for (let j = 0; j < this.enemies.length; j++) {
+      const enemy = this.enemies[j];
+      if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+      if (!this.isPetTargetInReach(enemy, aggressive)) continue;
+
+      const distSq = this.petTargetDistanceSq(pet, enemy, aggressive);
+      if (distSq < anyDistSq) {
+        anyDistSq = distSq;
+        anyTarget = enemy;
+      }
+      // Wave chiefs and arena guardians may always be focused by the whole pack.
+      if ((enemy.isBoss || !claimed.has(enemy)) && distSq < freeDistSq) {
+        freeDistSq = distSq;
+        freeTarget = enemy;
+      }
+    }
+
+    const target = freeTarget ?? anyTarget;
+    if (target && !target.isBoss) claimed.add(target);
+    return target;
+  }
+
+  /** Aggressive pets hunt the whole screen; guard pets only near the Domador. */
+  private isPetTargetInReach(enemy: Enemy, aggressive: boolean): boolean {
+    if (aggressive) {
+      const halfViewWidth = this.camera.viewportWidth / 2 + 80;
+      const halfViewHeight = this.camera.viewportHeight / 2 + 80;
+      return (
+        Math.abs(enemy.x - this.camera.x) <= halfViewWidth &&
+        Math.abs(enemy.y - this.camera.y) <= halfViewHeight
+      );
+    }
+    const dx = enemy.x - this.player.x;
+    const dy = enemy.y - this.player.y;
+    return dx * dx + dy * dy <= this.petGuardRadius * this.petGuardRadius;
+  }
+
+  /** Aggressive ranks by the pet's own distance; guard by the hero's distance. */
+  private petTargetDistanceSq(pet: Pet, enemy: Enemy, aggressive: boolean): number {
+    const fromX = aggressive ? pet.x : this.player.x;
+    const fromY = aggressive ? pet.y : this.player.y;
+    const dx = enemy.x - fromX;
+    const dy = enemy.y - fromY;
+    return dx * dx + dy * dy;
   }
 
   /** Defensive ring around the Domador de Feras, evenly spaced per slot. */
@@ -2934,6 +3068,37 @@ export class GameEngine {
     this.syncHUD();
   }
 
+  /**
+   * Aura de Doma capture. Returns true when the creature became a pet, so no
+   * kill rewards or death effects are processed.
+   */
+  private captureMarkedEnemy(enemy: Enemy): boolean {
+    if (!this.isBeastmaster() || !this.markedEnemyIds.has(enemy.id)) return false;
+    if (!this.canTame(enemy) || this.pets.length >= this.petMaxSlots) {
+      this.markedEnemyIds.delete(enemy.id);
+      return false;
+    }
+
+    this.markedEnemyIds.delete(enemy.id);
+    const pet = new Pet(
+      enemy.x,
+      enemy.y,
+      enemy.type,
+      enemy.name || 'Fera',
+      Math.max(30, enemy.maxHp * 0.55),
+      10,
+      petAttackStyleFor(enemy.type)
+    );
+    pet.syncHeroLevel(this.player.level);
+    this.applyPetBonuses(pet);
+    this.pets.push(pet);
+    this.vfx.addDeathBurst(enemy.x, enemy.y, '#4ade80', 16);
+    this.vfx.addSparks(enemy.x, enemy.y, '#fbbf24', 10);
+    this.weaponSystem.spawnRingPulse(enemy.x, enemy.y, 54, '#fbbf24', 0.4);
+    this.syncHUD();
+    return true;
+  }
+
   private onEnemyKilled(enemy: Enemy): void {
     if (this.processedEnemyDeaths.has(enemy)) return;
     this.processedEnemyDeaths.add(enemy);
@@ -2944,26 +3109,7 @@ export class GameEngine {
     }
 
     // Aura de Doma: a marked creature is tamed instead of staying dead.
-    if (this.isBeastmaster()) {
-      const wasMarked = this.markedEnemyIds.delete(enemy.id);
-      if (wasMarked && this.canTame(enemy) && this.pets.length < this.petMaxSlots) {
-        const pet = new Pet(
-          enemy.x,
-          enemy.y,
-          enemy.type,
-          enemy.name || 'Fera',
-          Math.max(30, enemy.maxHp * 0.55),
-          10,
-          petAttackStyleFor(enemy.type)
-        );
-        pet.syncHeroLevel(this.player.level);
-        this.applyPetBonuses(pet);
-        this.pets.push(pet);
-        this.vfx.addDeathBurst(enemy.x, enemy.y, '#4ade80', 16);
-        this.vfx.addSparks(enemy.x, enemy.y, '#fbbf24', 10);
-        this.weaponSystem.spawnRingPulse(enemy.x, enemy.y, 54, '#fbbf24', 0.4);
-      }
-    }
+    if (this.captureMarkedEnemy(enemy)) return;
 
     if (this.tribeHunter && canDropHunterFish(this.hunterQuest, enemy, this.worldProps.isMainRiverWater(enemy.x, enemy.y))) {
       this.drops.push(new Drop(Date.now() + Math.random(), 'quest_fish', enemy.x, enemy.y));
@@ -3489,6 +3635,12 @@ export class GameEngine {
       passives: passivesList,
       pets: petsList,
       petStance: this.petStance,
+      nativeWeapon: this.player.character.nativeWeapon
+        ? {
+            name: this.player.character.nativeWeapon.name,
+            iconName: this.player.character.nativeWeapon.iconName,
+          }
+        : undefined,
       activeBoss,
       eventAlert: this.waveDirector.eventAlert || undefined,
       objectives: this.getHunterForestMission(),
@@ -3599,6 +3751,31 @@ export class GameEngine {
       ctx.beginPath();
       ctx.arc(screen.x - shot.radius * 0.25, screen.y - shot.radius * 0.25, shot.radius * 0.35, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
+    }
+    for (let i = 0; i < this.tranquilizerDarts.length; i++) {
+      const dart = this.tranquilizerDarts[i];
+      if (!camera.isInView(dart.x, dart.y, 24)) continue;
+      const screen = camera.worldToScreen(dart.x, dart.y);
+      const len = Math.hypot(dart.vx, dart.vy) || 1;
+      const trailX = (dart.vx / len) * 14;
+      const trailY = (dart.vy / len) * 14;
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.shadowColor = '#fde047';
+      ctx.shadowBlur = 8;
+      ctx.strokeStyle = '#fef3c7';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(screen.x - trailX, screen.y - trailY);
+      ctx.lineTo(screen.x, screen.y);
+      ctx.stroke();
+      ctx.strokeStyle = '#84cc16';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(screen.x - trailX * 0.85, screen.y - trailY * 0.85);
+      ctx.lineTo(screen.x, screen.y);
+      ctx.stroke();
       ctx.restore();
     }
     if (this.anacondaAvailable && this.anacondaNpc && this.player.y < this.anacondaNpc.y) this.anacondaNpc.render(ctx, camera);

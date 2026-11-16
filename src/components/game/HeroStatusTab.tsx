@@ -19,6 +19,7 @@ const HERO_WEAPON_LEVEL_ONE: Record<
   kayrurururu: { damage: [30], cooldown: 1.42, cooldownFactor: 0.7 },
   dr_janelinha: { damage: [13], cooldown: 0.9 },
   lula: { damage: [LULA_SKILL.damage], cooldown: LULA_SKILL.cooldown / 1000 },
+  domador_feras: { damage: [12], cooldown: 1.1, damageNote: 'zarabatana' },
 };
 
 const formatNumber = (value: number, digits = 1): string =>
@@ -28,7 +29,7 @@ const formatSeconds = (value: number): string => `${formatNumber(value, 2)} s`;
 
 function describeCharacterPassive(character: CharacterConfig): string {
   if (character.id === 'domador_feras') {
-    return 'Aura de Doma: marca fauna comum abaixo de 40% de HP e converte a criatura abatida em um pet aliado (limite inicial de 2).';
+    return 'Aura de Doma: marca fauna comum abaixo do limite de captura (40% base, até 65% com Doma Rápida) e converte a criatura marcada em um pet aliado.';
   }
   const bonuses = character.statBonuses;
   const parts: string[] = [];
@@ -91,7 +92,9 @@ export const HeroStatusTab: React.FC = () => {
       <div className="flex max-h-[30rem] w-full flex-col gap-3 overflow-y-auto pr-1">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {heroes.map(({ character, player, weapon }) => {
-            const hasWeapon = Boolean(character.startingWeapon && weapon);
+            const hasWeapon = Boolean(
+              (character.startingWeapon && weapon) || character.nativeWeapon
+            );
             const profile = HERO_WEAPON_LEVEL_ONE[character.id] ?? {
               damage: [0],
               cooldown: 0,
@@ -149,13 +152,18 @@ export const HeroStatusTab: React.FC = () => {
                     value={hasWeapon ? `${formatSeconds(cooldown)} por ataque` : '—'}
                   />
                   <StatRow
-                    label="Habilidade Nativa"
+                    label={character.nativeWeapon ? 'Arma Nativa' : 'Habilidade Nativa'}
                     value={
                       <span className="flex items-center justify-end gap-1">
                         {character.startingWeapon && weapon ? (
                           <>
                             {renderWeaponIcon(character.startingWeapon, 'w-4 h-4')}
                             <span>{weapon.name}</span>
+                          </>
+                        ) : character.nativeWeapon ? (
+                          <>
+                            {renderNamedIcon(character.nativeWeapon.iconName, 'w-4 h-4')}
+                            <span>{character.nativeWeapon.name}</span>
                           </>
                         ) : (
                           <>

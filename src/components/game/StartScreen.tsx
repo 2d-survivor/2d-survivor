@@ -520,13 +520,22 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
 
                     <div className="mt-4 flex items-center justify-between border-t border-[#383e4c] pt-3">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#9ca3af]">
-                        {char.startingWeapon ? 'Arma Inicial:' : 'Habilidade Nativa:'}
+                        {char.startingWeapon
+                          ? 'Arma Inicial:'
+                          : char.nativeWeapon
+                            ? 'Arma Nativa:'
+                            : 'Habilidade Nativa:'}
                       </span>
                       <div className="flex items-center gap-1 text-xs font-bold text-[#e5e7eb]">
                         {char.startingWeapon && startingWeaponMeta ? (
                           <>
                             {renderWeaponIcon(char.startingWeapon, 'w-5 h-5')}
                             <span>{startingWeaponMeta.name}</span>
+                          </>
+                        ) : char.nativeWeapon ? (
+                          <>
+                            {renderNamedIcon(char.nativeWeapon.iconName, 'w-5 h-5')}
+                            <span>{char.nativeWeapon.name}</span>
                           </>
                         ) : (
                           <>

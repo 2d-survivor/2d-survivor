@@ -1,4 +1,5 @@
 import { CharacterConfig } from '../types';
+import { ZARABATANA } from './zarabatana';
 
 export const CHARACTERS: CharacterConfig[] = [
   {
@@ -104,10 +105,13 @@ export const CHARACTERS: CharacterConfig[] = [
     name: 'Domador de Feras',
     title: 'Beastmaster',
     description:
-      'Andarilho que enxerga aliados na fauna da floresta. Sua Aura de Doma converte animais enfraquecidos em feras leais.',
+      'Andarilho que enxerga aliados na fauna da floresta. Sua Zarabatana Tranquilizante enfraquece e captura animais, e a Aura de Doma converte criaturas marcadas em feras leais.',
+    nativeWeapon: ZARABATANA,
     iconName: 'PawPrint',
     color: '#3f6212',
     portraitColor: '#1a2e05',
+    walkSprite: '/domador-walk-spritesheet.png',
+    walkFrames: 4,
     statBonuses: {
       maxHp: 15,
       armor: 1,

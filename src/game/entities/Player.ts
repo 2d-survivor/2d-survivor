@@ -532,8 +532,14 @@ export class Player {
 
     this.isMoving = moving || dashing;
     if (this.isMoving) {
-      this.walkAnimTimer += dt * 10 * (this.character.id === 'lula'
-        ? Math.max(0.4, effectiveSpeed / 160) : 1);
+      // Shorter sheets need a slower gait so the stride reads at walking pace.
+      const gaitSpeed =
+        this.character.id === 'domador_feras'
+          ? Math.max(0.35, effectiveSpeed / 200)
+          : this.character.id === 'lula'
+            ? Math.max(0.4, effectiveSpeed / 160)
+            : 1;
+      this.walkAnimTimer += dt * 10 * gaitSpeed;
     } else {
       this.walkAnimTimer = 0;
     }

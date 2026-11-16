@@ -5,7 +5,7 @@ import { ForestStagePanel } from './ForestStagePanel';
 import { COMPANIONS } from '@/game/data/companions';
 import { HUDState, SpecialAbilityHUD } from '@/game/types';
 import { HUNTER_FISH_TARGET } from '@/game/data/hunterQuest';
-import { renderWeaponIcon, renderPassiveIcon } from './GameIcons';
+import { renderWeaponIcon, renderPassiveIcon, renderNamedIcon } from './GameIcons';
 import {
   Skull,
   Coins,
@@ -77,6 +77,8 @@ export const HUD: React.FC<HUDProps> = ({
   ];
   const petStance = hud.petStance ?? 'aggressive';
   const isAggressiveStance = petStance === 'aggressive';
+  const nativeWeapon = hud.nativeWeapon;
+  const attackCount = Math.min(4, hud.weapons.length + (nativeWeapon ? 1 : 0));
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none flex flex-col justify-between p-3 font-sans text-white">
@@ -155,11 +157,25 @@ export const HUD: React.FC<HUDProps> = ({
             <div className="w-56 max-w-full rounded-lg border border-slate-700/80 bg-slate-950/85 px-2 py-1.5 shadow-lg backdrop-blur-sm">
               <div className="mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-widest">
                 <span className="text-amber-300">Ataques</span>
-                <span className="text-slate-500">{Math.min(4, hud.weapons.length)}/4</span>
+                <span className="text-slate-500">{attackCount}/4</span>
               </div>
               <div className="grid grid-cols-4 gap-1">
                 {Array.from({ length: 4 }).map((_, index) => {
-                  const weapon = hud.weapons[index];
+                  if (nativeWeapon && index === 0) {
+                    return (
+                      <div
+                        key={`native-${nativeWeapon.name}`}
+                        title={`${nativeWeapon.name} (Arma nativa exclusiva)`}
+                        className="relative flex h-8 items-center justify-center rounded border border-emerald-500/70 bg-slate-900/85"
+                      >
+                        {renderNamedIcon(nativeWeapon.iconName, 'h-4 w-4')}
+                        <span className="absolute -bottom-1.5 -right-1 rounded border border-emerald-800 bg-slate-950 px-0.5 text-[7px] font-black text-emerald-300">
+                          Nativa
+                        </span>
+                      </div>
+                    );
+                  }
+                  const weapon = hud.weapons[nativeWeapon ? index - 1 : index];
                   return weapon ? (
                     <div
                       key={weapon.id}
@@ -290,12 +306,12 @@ export const HUD: React.FC<HUDProps> = ({
                   ? `${slot.name ?? 'Especial'}${slot.description ? ` — ${slot.description}` : ''}`
                   : 'Slot bloqueado'}
                 className={`relative flex h-14 w-16 flex-col items-center justify-center rounded-lg border-2 bg-slate-950/85 shadow-lg backdrop-blur-sm ${slot.unlocked
-                    ? slot.active
-                      ? 'border-emerald-400 shadow-emerald-500/40'
-                      : ready
-                        ? 'border-amber-400 shadow-amber-500/30'
-                        : 'border-slate-600'
-                    : 'border-slate-800 opacity-60'
+                  ? slot.active
+                    ? 'border-emerald-400 shadow-emerald-500/40'
+                    : ready
+                      ? 'border-amber-400 shadow-amber-500/30'
+                      : 'border-slate-600'
+                  : 'border-slate-800 opacity-60'
                   }`}
               >
                 <span className="absolute -left-1 -top-2 flex h-4 w-4 items-center justify-center rounded border border-slate-600 bg-slate-950 font-mono text-[9px] font-black text-slate-200">
@@ -360,8 +376,8 @@ export const HUD: React.FC<HUDProps> = ({
                       if (event.altKey) onReleasePet(index);
                     }}
                     className={`relative flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg border bg-gradient-to-b from-slate-900 to-slate-950 px-1 py-1 transition active:scale-95 ${pet.evolved
-                        ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.55)]'
-                        : 'border-amber-700/70 hover:border-amber-500'
+                      ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.55)]'
+                      : 'border-amber-700/70 hover:border-amber-500'
                       }`}
                   >
                     {renderPetIcon(pet.type, 'h-6 w-6')}
@@ -378,10 +394,10 @@ export const HUD: React.FC<HUDProps> = ({
                     >
                       <div
                         className={`h-full rounded-full transition-[width] duration-150 motion-reduce:transition-none ${petHpPercent > 50
-                            ? 'bg-emerald-500'
-                            : petHpPercent > 25
-                              ? 'bg-amber-500'
-                              : 'bg-red-500'
+                          ? 'bg-emerald-500'
+                          : petHpPercent > 25
+                            ? 'bg-amber-500'
+                            : 'bg-red-500'
                           }`}
                         style={{ width: `${petHpPercent}%` }}
                       />
@@ -411,8 +427,8 @@ export const HUD: React.FC<HUDProps> = ({
                 title={`Postura: ${isAggressiveStance ? 'Agressivo' : 'Guarda'} (R para alternar)\nAgressivo: caça inimigos em toda a tela.\nGuarda: forma um círculo defensivo e prioriza quem se aproxima.`}
                 aria-label={`Alternar postura da matilha. Atual: ${isAggressiveStance ? 'Agressivo' : 'Guarda'}`}
                 className={`flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border bg-gradient-to-b from-slate-900 to-slate-950 px-1 py-1 text-center transition active:scale-95 ${isAggressiveStance
-                    ? 'border-orange-500/80 text-orange-300 hover:border-orange-300'
-                    : 'border-sky-500/80 text-sky-300 hover:border-sky-300'
+                  ? 'border-orange-500/80 text-orange-300 hover:border-orange-300'
+                  : 'border-sky-500/80 text-sky-300 hover:border-sky-300'
                   }`}
               >
                 {isAggressiveStance ? <Swords className="h-6 w-6" /> : <Shield className="h-6 w-6" />}

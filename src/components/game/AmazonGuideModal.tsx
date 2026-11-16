@@ -348,11 +348,12 @@ const HERO_WEAPON_LEVEL_ONE: Record<
   kayrurururu: { damage: [30], cooldown: 1.42, cooldownFactor: 0.7 },
   dr_janelinha: { damage: [13], cooldown: 0.9 },
   lula: { damage: [LULA_SKILL.damage], cooldown: LULA_SKILL.cooldown / 1000 },
+  domador_feras: { damage: [12], cooldown: 1.1, damageNote: 'zarabatana' },
 };
 
 function describeCharacterPassive(character: CharacterConfig): string {
   if (character.id === 'domador_feras') {
-    return 'Aura de Doma: marca fauna comum abaixo de 40% de HP e converte a criatura abatida em um pet aliado (limite inicial de 2).';
+    return 'Aura de Doma: marca fauna comum abaixo do limite de captura (40% base, até 65% com Doma Rápida) e converte a criatura marcada em um pet aliado.';
   }
   const bonuses = character.statBonuses;
   const parts: string[] = [];
@@ -1134,7 +1135,9 @@ export const AmazonGuideModal: React.FC<AmazonGuideModalProps> = ({ onClose }) =
                       damageNote: undefined,
                     };
                   const might = player.might;
-                  const hasWeapon = Boolean(character.startingWeapon && weapon);
+                  const hasWeapon = Boolean(
+                    (character.startingWeapon && weapon) || character.nativeWeapon
+                  );
                   const cooldown =
                     profile.cooldown *
                     Math.max(0.45, 1 - player.cooldownReduction) *
@@ -1195,8 +1198,12 @@ export const AmazonGuideModal: React.FC<AmazonGuideModalProps> = ({ onClose }) =
                           value={hasWeapon ? `${formatSeconds(cooldown)} por ataque` : '—'}
                         />
                         <GuideStatRow
-                          label="Habilidade Nativa"
-                          value={weapon ? weapon.name : 'Aura de Doma'}
+                          label={character.nativeWeapon ? 'Arma Nativa' : 'Habilidade Nativa'}
+                          value={
+                            weapon?.name ??
+                            character.nativeWeapon?.name ??
+                            'Aura de Doma'
+                          }
                         />
                         <GuideStatRow
                           label="Habilidade Passiva"
