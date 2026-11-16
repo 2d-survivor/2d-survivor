@@ -456,6 +456,9 @@ export class GameEngine {
   private zarabatanaTimer = 0.5;
   private petCritCounter = 0;
   private petStance: 'aggressive' | 'guard' = 'aggressive';
+  /** Current angle of the guard orbit; advances while the pack is guarding. */
+  private petOrbitAngle = 0;
+  private readonly petOrbitSpeed = 0.6;
   private readonly petGuardRadius = 320;
   private readonly petUpgradeLevels: Record<PetUpgradeId, number> = {
     chamado_matilha: 0,
@@ -2787,6 +2790,9 @@ export class GameEngine {
 
     const aggressive = this.petStance === 'aggressive';
     const petCount = this.pets.length;
+    if (!aggressive) {
+      this.petOrbitAngle = (this.petOrbitAngle + dt * this.petOrbitSpeed) % (Math.PI * 2);
+    }
     // Enemies already focused by a packmate this frame. Bosses are never
     // reserved, so the pack can still gang up on wave chiefs and guardians.
     const claimedTargets = new Set<Enemy>();
@@ -2803,15 +2809,31 @@ export class GameEngine {
 
       const target = this.selectPetTarget(pet, claimedTargets, aggressive);
 
-      if (!target) {
-        if (aggressive) {
-          const distToPlayer = Math.hypot(this.player.x - pet.x, this.player.y - pet.y);
-          if (distToPlayer > 90) pet.update(dt, this.player.x, this.player.y);
-          else pet.update(dt, null, null);
-        } else {
-          const slot = this.petGuardSlot(i, petCount);
-          pet.update(dt, slot.x, slot.y);
+      if (!aggressive) {
+        // Guarda: a fera orbita o Domador e nunca abandona o anel, atacando só
+        // o que entra no alcance a partir da própria órbita.
+        const slot = this.petOrbitSlot(i, petCount);
+        pet.update(dt, slot.x, slot.y);
+        if (this.damagePetOnContact(pet)) continue;
+        if (!target || pet.attackTimer > 0) continue;
+
+        const reach = Math.hypot(target.x - pet.x, target.y - pet.y);
+        if (pet.attackStyle === 'ranged') {
+          if (reach <= 340) {
+            pet.attackTimer = this.petAttackCooldown(pet);
+            this.firePetProjectile(pet, target);
+          }
+        } else if (reach <= pet.radius + target.radius + 10) {
+          pet.attackTimer = this.petAttackCooldown(pet);
+          this.petMeleeAttack(pet, target);
         }
+        continue;
+      }
+
+      if (!target) {
+        const distToPlayer = Math.hypot(this.player.x - pet.x, this.player.y - pet.y);
+        if (distToPlayer > 90) pet.update(dt, this.player.x, this.player.y);
+        else pet.update(dt, null, null);
         continue;
       }
 
@@ -2904,11 +2926,14 @@ export class GameEngine {
     return dx * dx + dy * dy;
   }
 
-  /** Defensive ring around the Domador de Feras, evenly spaced per slot. */
-  private petGuardSlot(index: number, total: number): { x: number; y: number } {
+  /**
+   * Rotating defensive ring around the Domador. Guard pets keep to this orbit
+   * and follow the hero instead of drifting after distant prey.
+   */
+  private petOrbitSlot(index: number, total: number): { x: number; y: number } {
     const ringRadius = 82;
     const count = Math.max(1, total);
-    const angle = (Math.PI * 2 * index) / count - Math.PI / 2;
+    const angle = this.petOrbitAngle + (Math.PI * 2 * index) / count - Math.PI / 2;
     return {
       x: this.player.x + Math.cos(angle) * ringRadius,
       y: this.player.y + Math.sin(angle) * ringRadius,

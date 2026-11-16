@@ -424,7 +424,7 @@ export const HUD: React.FC<HUDProps> = ({
               <button
                 type="button"
                 onClick={onTogglePetStance}
-                title={`Postura: ${isAggressiveStance ? 'Agressivo' : 'Guarda'} (R para alternar)\nAgressivo: caça inimigos em toda a tela.\nGuarda: forma um círculo defensivo e prioriza quem se aproxima.`}
+                title={`Postura: ${isAggressiveStance ? 'Agressivo' : 'Guarda'} (R para alternar)\nAgressivo: caça inimigos em toda a tela.\nGuarda: as feras orbitam o Domador sem se afastar e atacam quem entra no alcance.`}
                 aria-label={`Alternar postura da matilha. Atual: ${isAggressiveStance ? 'Agressivo' : 'Guarda'}`}
                 className={`flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border bg-gradient-to-b from-slate-900 to-slate-950 px-1 py-1 text-center transition active:scale-95 ${isAggressiveStance
                   ? 'border-orange-500/80 text-orange-300 hover:border-orange-300'
