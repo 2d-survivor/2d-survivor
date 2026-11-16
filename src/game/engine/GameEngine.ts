@@ -457,8 +457,14 @@ export class GameEngine {
   private zarabatanaTimer = 0.5;
   private petCritCounter = 0;
   private petStance: 'aggressive' | 'guard' = 'aggressive';
-  /** Species the player allowed the aura to tame. Empty until picked in the HUD. */
-  private unlockedTameSpecies = new Set<EnemyType>();
+  /**
+   * Species the Aura de Doma may tame. Starts with every common creature
+   * unlocked (bosses and elites are never in the catalog); the HUD bar lets
+   * the player block or re-enable each one.
+   */
+  private unlockedTameSpecies = new Set<EnemyType>(
+    TAMEABLE_SPECIES.map((species) => species.type)
+  );
   /** Current angle of the guard orbit; advances while the pack is guarding. */
   private petOrbitAngle = 0;
   private readonly petOrbitSpeed = 0.6;
