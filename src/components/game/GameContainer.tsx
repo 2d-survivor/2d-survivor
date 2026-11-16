@@ -323,6 +323,7 @@ export const GameContainer: React.FC = () => {
           difficultyName={getDifficulty(selectedDifficulty).name}
           onReleasePet={(index) => engineRef.current?.releasePet(index)}
           onTogglePetStance={() => engineRef.current?.togglePetStance()}
+          onToggleTameSpecies={(type) => engineRef.current?.toggleTameSpecies(type)}
         />
       )}
 

@@ -58,6 +58,7 @@ import {
 } from '../systems/WorldProps';
 import { WEAPON_REGISTRY, PASSIVE_REGISTRY, AMAZON_STARTING_WEAPON_BY_CHARACTER } from '../data/upgrades';
 import { PET_UPGRADE_REGISTRY, PET_UPGRADE_IDS } from '../data/petUpgrades';
+import { TAMEABLE_SPECIES } from '../data/doma';
 import { ZARABATANA_STATS } from '../data/zarabatana';
 import { saveGameData, loadSavedData } from '../data/persistence';
 import { getDifficulty } from '../data/difficulties';
@@ -456,6 +457,8 @@ export class GameEngine {
   private zarabatanaTimer = 0.5;
   private petCritCounter = 0;
   private petStance: 'aggressive' | 'guard' = 'aggressive';
+  /** Species the player allowed the aura to tame. Empty until picked in the HUD. */
+  private unlockedTameSpecies = new Set<EnemyType>();
   /** Current angle of the guard orbit; advances while the pack is guarding. */
   private petOrbitAngle = 0;
   private readonly petOrbitSpeed = 0.6;
@@ -2640,9 +2643,17 @@ export class GameEngine {
     return pet.attackInterval / this.petAttackSpeedMultiplier;
   }
 
-  /** Common fauna only: bosses, elites and illusory clones cannot be tamed. */
+  /**
+   * A creature is tameable only when its species is unlocked in the doma bar
+   * and it is not a boss, an elite or an illusory clone.
+   */
   private canTame(enemy: Enemy): boolean {
-    return !enemy.isBoss && !enemy.isElite && !(enemy instanceof KopenawaClone);
+    return (
+      this.unlockedTameSpecies.has(enemy.type) &&
+      !enemy.isBoss &&
+      !enemy.isElite &&
+      !(enemy instanceof KopenawaClone)
+    );
   }
 
   /**
@@ -2957,6 +2968,24 @@ export class GameEngine {
       this.petStance === 'aggressive' ? '#fb923c' : '#7dd3fc',
       8
     );
+    this.syncHUD();
+  }
+
+  /**
+   * Doma bar: unlock or block a species. Locked species are never marked by
+   * the Aura de Doma, so the pack only grows with the creatures the player
+   * picked. Already tamed pets are unaffected by blocking their species.
+   */
+  public toggleTameSpecies(type: EnemyType): void {
+    if (!this.isBeastmaster() || this.isGameOver) return;
+    if (this.unlockedTameSpecies.has(type)) {
+      this.unlockedTameSpecies.delete(type);
+      this.vfx.addSparks(this.player.x, this.player.y - 10, '#94a3b8', 6);
+    } else {
+      this.unlockedTameSpecies.add(type);
+      this.vfx.addSparks(this.player.x, this.player.y - 10, '#fbbf24', 8);
+      this.weaponSystem.spawnRingPulse(this.player.x, this.player.y, 70, '#fbbf24', 0.35);
+    }
     this.syncHUD();
   }
 
@@ -3660,6 +3689,14 @@ export class GameEngine {
       passives: passivesList,
       pets: petsList,
       petStance: this.petStance,
+      petSlots: this.isBeastmaster() ? this.petMaxSlots : undefined,
+      tameSpecies: this.isBeastmaster()
+        ? TAMEABLE_SPECIES.map((species) => ({
+            type: species.type,
+            name: species.name,
+            unlocked: this.unlockedTameSpecies.has(species.type),
+          }))
+        : undefined,
       nativeWeapon: this.player.character.nativeWeapon
         ? {
             name: this.player.character.nativeWeapon.name,

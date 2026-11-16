@@ -415,6 +415,14 @@ export interface HUDState {
   }[];
   /** Domador de Feras pack behaviour, toggled with R or the HUD button. */
   petStance?: 'aggressive' | 'guard';
+  /** How many companions the current pack can hold (Domador only). */
+  petSlots?: number;
+  /** Domador de Feras: every tameable species and whether the player unlocked it. */
+  tameSpecies?: {
+    type: EnemyType;
+    name: string;
+    unlocked: boolean;
+  }[];
   /** Fixed hero-exclusive weapon shown in the attacks panel. */
   nativeWeapon?: {
     name: string;

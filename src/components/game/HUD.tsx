@@ -3,7 +3,7 @@
 import React from 'react';
 import { ForestStagePanel } from './ForestStagePanel';
 import { COMPANIONS } from '@/game/data/companions';
-import { HUDState, SpecialAbilityHUD } from '@/game/types';
+import { HUDState, EnemyType, SpecialAbilityHUD } from '@/game/types';
 import { HUNTER_FISH_TARGET } from '@/game/data/hunterQuest';
 import { renderWeaponIcon, renderPassiveIcon, renderNamedIcon } from './GameIcons';
 import {
@@ -19,6 +19,8 @@ import {
   Bird,
   Bug,
   PawPrint,
+  Lock,
+  Unlock,
   Shield,
   Swords,
 } from 'lucide-react';
@@ -50,6 +52,7 @@ interface HUDProps {
 
   onReleasePet: (index: number) => void;
   onTogglePetStance: () => void;
+  onToggleTameSpecies: (type: EnemyType) => void;
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -60,6 +63,7 @@ export const HUD: React.FC<HUDProps> = ({
   difficultyName,
   onReleasePet,
   onTogglePetStance,
+  onToggleTameSpecies,
 }) => {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -77,13 +81,19 @@ export const HUD: React.FC<HUDProps> = ({
   ];
   const petStance = hud.petStance ?? 'aggressive';
   const isAggressiveStance = petStance === 'aggressive';
+  const tameSpecies = hud.tameSpecies;
+  const hasTameBar = !!tameSpecies && tameSpecies.length > 0;
+  const unlockedSpeciesCount = tameSpecies ? tameSpecies.filter((species) => species.unlocked).length : 0;
+  const petSlots = hud.petSlots ?? hud.pets?.length ?? 0;
+  const petBarOffset = hasTameBar ? 'bottom-[16.5rem]' : 'bottom-[6.5rem]';
+  const questPanelOffset = hasTameBar ? 'bottom-[22rem]' : 'bottom-[11.5rem]';
   const nativeWeapon = hud.nativeWeapon;
   const attackCount = Math.min(4, hud.weapons.length + (nativeWeapon ? 1 : 0));
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none flex flex-col justify-between p-3 font-sans text-white">
       {hud.hunterQuest?.accepted && !hud.hunterQuest.completed && (
-        <div role="status" className="absolute bottom-28 left-1/2 w-60 max-w-[72vw] -translate-x-1/2 rounded-xl border border-amber-600 bg-stone-950/95 px-4 py-3 text-amber-100 shadow-lg sm:bottom-24">
+        <div role="status" className={`absolute left-1/2 w-60 max-w-[72vw] -translate-x-1/2 rounded-xl border border-amber-600 bg-stone-950/95 px-4 py-3 text-amber-100 shadow-lg ${questPanelOffset}`}>
           <div className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-2 text-sm font-bold"><Fish className="h-5 w-5 text-cyan-300" /> Peixes</span>
             <span className="font-mono text-xl font-black tabular-nums">{hud.hunterQuest.fish}/{HUNTER_FISH_TARGET}</span>
@@ -292,6 +302,53 @@ export const HUD: React.FC<HUDProps> = ({
 
       {/* Bottom bar: three special ability slots */}
       <div className="flex flex-col gap-1">
+        {/* Doma bar: Domador de Feras species filter. All blocked until picked. */}
+        {hasTameBar && (
+          <div className="pointer-events-auto mx-auto flex w-full max-w-[min(96vw,48rem)] flex-col gap-1 rounded-xl border border-amber-700/60 bg-slate-950/90 px-2 py-1.5 shadow-2xl backdrop-blur-md">
+            <div className="flex items-center justify-between gap-2 px-0.5">
+              <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-200">
+                <PawPrint className="h-3 w-3 text-amber-300" />
+                Doma — espécies liberadas
+              </span>
+              <span className="whitespace-nowrap text-[9px] font-bold text-amber-100/70">
+                {unlockedSpeciesCount}/{tameSpecies.length} • Matilha {hud.pets?.length ?? 0}/{petSlots}
+              </span>
+            </div>
+            {unlockedSpeciesCount === 0 && (
+              <p role="status" className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-center text-[9px] font-bold text-amber-200">
+                Nenhuma espécie liberada — a Aura de Doma não captura nada até você escolher.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-1">
+              {tameSpecies.map((species) => (
+                <button
+                  key={species.type}
+                  type="button"
+                  onClick={() => onToggleTameSpecies(species.type)}
+                  aria-pressed={species.unlocked}
+                  aria-label={`${species.name}: ${species.unlocked ? 'liberada' : 'bloqueada'} para doma. Clique para ${species.unlocked ? 'bloquear' : 'liberar'}.`}
+                  title={`${species.name} — ${species.unlocked
+                    ? 'liberada: a Aura de Doma marca e a zarabatana captura.'
+                    : 'bloqueada: a aura ignora esta espécie.'}\nClique para ${species.unlocked ? 'bloquear' : 'liberar'}.`}
+                  className={`relative flex h-14 w-14 shrink-0 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg border bg-gradient-to-b from-slate-900 to-slate-950 px-1 py-1 transition active:scale-95 ${species.unlocked
+                    ? 'border-emerald-400/80 text-emerald-200 hover:border-emerald-300'
+                    : 'border-slate-800 text-slate-500 opacity-70 grayscale hover:border-slate-600 hover:opacity-100 hover:grayscale-0'
+                    }`}
+                >
+                  {renderPetIcon(species.type, 'h-5 w-5')}
+                  <span className="w-full break-words text-center text-[7px] font-bold uppercase leading-[1.05] tracking-wide">
+                    {species.name}
+                  </span>
+                  <span className="absolute -right-1 -top-1 rounded-full border border-slate-700 bg-slate-950 p-0.5">
+                    {species.unlocked
+                      ? <Unlock className="h-2.5 w-2.5 text-emerald-300" />
+                      : <Lock className="h-2.5 w-2.5 text-slate-400" />}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex justify-center gap-2">
           {specialSlots.map((slot, index) => {
             const cooldownMax = Math.max(1, slot.cooldownMax);
@@ -355,8 +412,7 @@ export const HUD: React.FC<HUDProps> = ({
         {/* Pet bar: Domador de Feras companions (Alt + Right Click releases) */}
         {hud.pets && hud.pets.length > 0 && (
           <div
-            className={`absolute left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-1 ${hud.hunterQuest?.accepted && !hud.hunterQuest.completed ? 'bottom-[11.5rem]' : 'bottom-11'
-              }`}
+            className={`absolute left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-1 ${petBarOffset}`}
           >
             <div className="pointer-events-auto flex items-end gap-2 rounded-xl border border-amber-700/60 bg-slate-950/85 px-2.5 py-2 shadow-2xl backdrop-blur-md">
               {hud.pets.map((pet, index) => {
