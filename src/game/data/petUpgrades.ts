@@ -9,10 +9,13 @@ export interface PetUpgradeDefinition {
   levelDescriptions: string[];
 }
 
-const MATILHA_MAX_PETS = 8;
+const MATILHA_MAX_PETS = 5;
 const BASE_MAX_PETS = 2;
+const MATILHA_PETS_PER_LEVEL = 1;
 const BASE_TAME_THRESHOLD = 40;
+const TAME_THRESHOLD_PER_LEVEL = 4;
 const BASE_AURA_RADIUS = 280;
+const AURA_RADIUS_PER_LEVEL = 30;
 
 /**
  * Domador de Feras exclusive level-up cards. They replace the common weapon,
@@ -25,8 +28,8 @@ export const PET_UPGRADE_REGISTRY: Record<PetUpgradeId, PetUpgradeDefinition> = 
     iconName: 'Users',
     maxLevel: 3,
     levelDescriptions: [1, 2, 3].map((level) => {
-      const before = BASE_MAX_PETS + (level - 1) * 2;
-      const after = Math.min(MATILHA_MAX_PETS, before + 2);
+      const before = BASE_MAX_PETS + (level - 1) * MATILHA_PETS_PER_LEVEL;
+      const after = Math.min(MATILHA_MAX_PETS, before + MATILHA_PETS_PER_LEVEL);
       return `Aumenta o limite de pets ativos de ${before} para ${after}.`;
     }),
   },
@@ -37,7 +40,7 @@ export const PET_UPGRADE_REGISTRY: Record<PetUpgradeId, PetUpgradeDefinition> = 
     maxLevel: 5,
     levelDescriptions: [1, 2, 3, 4, 5].map(
       (level) =>
-        `Pets domados causam +${level * 20}% de dano e atacam +${level * 20}% mais rápido.`
+        `Pets domados causam +${level * 10}% de dano e atacam +${level * 8}% mais rápido.`
     ),
   },
   couraca_floresta: {
@@ -47,7 +50,7 @@ export const PET_UPGRADE_REGISTRY: Record<PetUpgradeId, PetUpgradeDefinition> = 
     maxLevel: 5,
     levelDescriptions: [1, 2, 3, 4, 5].map(
       (level) =>
-        `Pets domados ganham +${level * 25}% de HP máximo e +${level * 2} de armadura.`
+        `Pets domados ganham +${level * 15}% de HP máximo e +${level} de armadura.`
     ),
   },
   elo_vital: {
@@ -57,7 +60,7 @@ export const PET_UPGRADE_REGISTRY: Record<PetUpgradeId, PetUpgradeDefinition> = 
     maxLevel: 5,
     levelDescriptions: [1, 2, 3, 4, 5].map(
       (level) =>
-        `Pets regeneram ${level * 2}% de HP/s e curam o Domador em 1 HP a cada 10 acertos críticos da matilha.`
+        `Pets regeneram ${level}% de HP/s e curam o Domador em 1 HP a cada 12 acertos críticos da matilha.`
     ),
   },
   doma_rapida: {
@@ -67,7 +70,11 @@ export const PET_UPGRADE_REGISTRY: Record<PetUpgradeId, PetUpgradeDefinition> = 
     maxLevel: 5,
     levelDescriptions: [1, 2, 3, 4, 5].map(
       (level) =>
-        `Doma criaturas com até ${BASE_TAME_THRESHOLD + level * 5}% de HP e amplia o alcance da aura para ${BASE_AURA_RADIUS + level * 40}.`
+        `Doma criaturas com até ${
+          BASE_TAME_THRESHOLD + level * TAME_THRESHOLD_PER_LEVEL
+        }% de HP e amplia o alcance da aura para ${
+          BASE_AURA_RADIUS + level * AURA_RADIUS_PER_LEVEL
+        }.`
     ),
   },
 };

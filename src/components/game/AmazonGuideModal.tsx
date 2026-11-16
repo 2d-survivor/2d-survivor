@@ -353,7 +353,7 @@ const HERO_WEAPON_LEVEL_ONE: Record<
 
 function describeCharacterPassive(character: CharacterConfig): string {
   if (character.id === 'domador_feras') {
-    return 'Aura de Doma: marca fauna comum abaixo do limite de captura (40% base, até 65% com Doma Rápida) e converte a criatura marcada em um pet aliado.';
+    return 'Aura de Doma: marca fauna comum abaixo do limite de captura (40% base, até 60% com Doma Rápida) e converte a criatura marcada em um pet aliado.';
   }
   const bonuses = character.statBonuses;
   const parts: string[] = [];

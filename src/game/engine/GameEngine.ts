@@ -2555,39 +2555,39 @@ export class GameEngine {
     return this.player.character.id === 'domador_feras';
   }
 
-  /** Pack size grows from 2 to 8 with three Chamado da Matilha levels. */
+  /** Pack size grows from 2 to 5 with three Chamado da Matilha levels. */
   private get petMaxSlots(): number {
-    return 2 + this.petUpgradeLevels.chamado_matilha * 2;
+    return 2 + this.petUpgradeLevels.chamado_matilha;
   }
 
   private get petDamageMultiplier(): number {
-    return 1 + this.petUpgradeLevels.furia_selvagem * 0.2;
+    return 1 + this.petUpgradeLevels.furia_selvagem * 0.1;
   }
 
   private get petAttackSpeedMultiplier(): number {
-    return 1 + this.petUpgradeLevels.furia_selvagem * 0.2;
+    return 1 + this.petUpgradeLevels.furia_selvagem * 0.08;
   }
 
   private get petHpMultiplier(): number {
-    return 1 + this.petUpgradeLevels.couraca_floresta * 0.25;
+    return 1 + this.petUpgradeLevels.couraca_floresta * 0.15;
   }
 
   private get petArmor(): number {
-    return this.petUpgradeLevels.couraca_floresta * 2;
+    return this.petUpgradeLevels.couraca_floresta;
   }
 
   private get petRegenPercent(): number {
-    return this.petUpgradeLevels.elo_vital * 0.02;
+    return this.petUpgradeLevels.elo_vital * 0.01;
   }
 
-  /** Doma Rápida raises the HP ceiling from 40% to 65%. */
+  /** Doma Rápida raises the HP ceiling from 40% to 60%. */
   private get domaTameThreshold(): number {
-    return 0.4 + this.petUpgradeLevels.doma_rapida * 0.05;
+    return 0.4 + this.petUpgradeLevels.doma_rapida * 0.04;
   }
 
-  /** Doma Rápida also widens the aura from 280 to 480 units. */
+  /** Doma Rápida also widens the aura from 280 to 430 units. */
   private get domaAuraRadius(): number {
-    return 280 + this.petUpgradeLevels.doma_rapida * 40;
+    return 280 + this.petUpgradeLevels.doma_rapida * 30;
   }
 
   private applyPetBonuses(pet: Pet): void {
@@ -2603,11 +2603,11 @@ export class GameEngine {
     for (let i = 0; i < this.pets.length; i++) this.applyPetBonuses(this.pets[i]);
   }
 
-  /** Elo Vital: the pack heals the Domador for 1 HP every 10 critical hits. */
+  /** Elo Vital: the pack heals the Domador for 1 HP every 12 critical hits. */
   private registerPetCrit(): void {
     if (this.petUpgradeLevels.elo_vital <= 0) return;
     this.petCritCounter += 1;
-    if (this.petCritCounter < 10) return;
+    if (this.petCritCounter < 12) return;
     this.petCritCounter = 0;
     this.player.heal(1);
     this.vfx.addDamageNumber(this.player.x, this.player.y - 20, 1, false, true);
@@ -2661,7 +2661,7 @@ export class GameEngine {
 
   /**
    * Aura de Doma: a periodic spiritual pulse marks common fauna below the
-   * current HP threshold (40% base, up to 65% with Doma Rápida). A marked
+   * current HP threshold (40% base, up to 60% with Doma Rápida). A marked
    * enemy that reaches 0 HP becomes a full-health ally pet.
    */
   private updateBeastmasterAura(dt: number): void {
