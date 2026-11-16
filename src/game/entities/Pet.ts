@@ -14,6 +14,7 @@ export function petAttackStyleFor(type: string): PetAttackStyle {
     case 'bullet_ant':
     case 'sawyer_beetle':
     case 'giant_centipede':
+    case 'elite_goliath_spider':
       return 'venom';
     case 'rhino_beetle':
     case 'capybara':
@@ -21,6 +22,9 @@ export function petAttackStyleFor(type: string): PetAttackStyle {
     case 'pink_river_dolphin':
     case 'giant_otter':
     case 'baby_black_caiman':
+    case 'elite_jaguar':
+    case 'elite_tapir':
+    case 'elite_black_caiman':
       return 'charge';
     default:
       return 'melee';

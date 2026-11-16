@@ -36,6 +36,7 @@ const PET_BUG_TYPES = new Set([
   'sawyer_beetle',
   'praying_mantis',
   'stick_bug',
+  'elite_goliath_spider',
 ]);
 
 /** Pet bar icon: birds and insects keep their silhouette, the rest use a paw. */

@@ -1,10 +1,10 @@
 import { EnemyType } from '../types';
 
 /**
- * Every common forest creature the Domador de Feras can tame. Bosses, elites
- * and illusory clones are never listed here. The player unlocks species in the
- * HUD's doma bar; only unlocked species can be marked by the Aura de Doma and
- * captured by the Zarabatana Tranquilizante.
+ * Every creature the Domador de Feras can tame: the common forest fauna and
+ * the rare forest elites. Bosses and illusory clones are never listed here.
+ * The player unlocks species in the HUD's doma bar; only unlocked species can
+ * be marked by the Aura de Doma and captured by the Zarabatana Tranquilizante.
  */
 export interface TameableSpecies {
   type: EnemyType;
@@ -35,4 +35,10 @@ export const TAMEABLE_SPECIES: TameableSpecies[] = [
   // Special spawns.
   { type: 'baby_black_caiman', name: 'Filhote de jacaré' },
   { type: 'bat', name: 'Morcego' },
+  // Amazon elites: rare, tough and worth the effort of taming.
+  { type: 'elite_jaguar', name: 'Onça-pintada' },
+  { type: 'elite_tapir', name: 'Anta' },
+  { type: 'elite_goliath_spider', name: 'Aranha-golias' },
+  { type: 'elite_black_caiman', name: 'Jacaré-açu' },
+  { type: 'sucuri', name: 'Sucuri' },
 ];

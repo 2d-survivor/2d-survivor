@@ -2650,16 +2650,13 @@ export class GameEngine {
   }
 
   /**
-   * A creature is tameable only when its species is unlocked in the doma bar
-   * and it is not a boss, an elite or an illusory clone.
+   * Only species in the doma catalog can be tamed: it already lists every
+   * common creature plus the forest elites, and never a boss or an illusory
+   * clone. Blocking a species in the HUD removes it from the aura's reach.
    */
   private canTame(enemy: Enemy): boolean {
-    return (
-      this.unlockedTameSpecies.has(enemy.type) &&
-      !enemy.isBoss &&
-      !enemy.isElite &&
-      !(enemy instanceof KopenawaClone)
-    );
+    if (enemy.isBoss || enemy instanceof KopenawaClone) return false;
+    return this.unlockedTameSpecies.has(enemy.type);
   }
 
   /**
@@ -3151,6 +3148,8 @@ export class GameEngine {
     );
     pet.syncHeroLevel(this.player.level);
     this.applyPetBonuses(pet);
+    // Tamed elites keep some of their bulk so they read as a bigger prize.
+    if (enemy.isElite) pet.radius = 17;
     this.pets.push(pet);
     this.vfx.addDeathBurst(enemy.x, enemy.y, '#4ade80', 16);
     this.vfx.addSparks(enemy.x, enemy.y, '#fbbf24', 10);
