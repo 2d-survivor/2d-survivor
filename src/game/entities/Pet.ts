@@ -65,6 +65,8 @@ export class Pet {
   /** Fraction of max HP regenerated per second (Elo Vital). */
   public regenPercent: number = 0;
   public readonly canEvolve: boolean;
+  /** Tamed forest elites keep a heavier ranged attack than common fauna. */
+  public readonly isElite: boolean;
   public readonly type: string;
   public readonly name: string;
   public readonly attackStyle: PetAttackStyle;
@@ -83,12 +85,14 @@ export class Pet {
     baseMaxHp: number,
     baseDamage: number,
     attackStyle: PetAttackStyle,
-    canEvolve: boolean = true
+    canEvolve: boolean = true,
+    isElite: boolean = false
   ) {
     this.x = x;
     this.y = y;
     this.type = type;
     this.name = name;
+    this.isElite = isElite;
     this.baseMaxHp = Math.max(24, Math.round(baseMaxHp));
     this.baseDamage = Math.max(1, baseDamage);
     this.attackStyle = attackStyle;

@@ -2812,12 +2812,14 @@ export class GameEngine {
         if (!target || pet.attackTimer > 0) continue;
 
         const reach = Math.hypot(target.x - pet.x, target.y - pet.y);
-        if (pet.attackStyle === 'ranged') {
-          if (reach <= 340) {
-            pet.attackTimer = this.petAttackCooldown(pet);
-            this.firePetProjectile(pet, target);
-          }
-        } else if (reach <= pet.radius + target.radius + 10) {
+        const biteDist = pet.radius + target.radius + 10;
+        if (pet.isElite && reach <= biteDist) {
+          pet.attackTimer = this.petAttackCooldown(pet);
+          this.petMeleeAttack(pet, target);
+        } else if ((pet.attackStyle === 'ranged' || pet.isElite) && reach <= 340) {
+          pet.attackTimer = this.petAttackCooldown(pet);
+          this.firePetProjectile(pet, target);
+        } else if (!pet.isElite && reach <= biteDist) {
           pet.attackTimer = this.petAttackCooldown(pet);
           this.petMeleeAttack(pet, target);
         }
@@ -2842,15 +2844,16 @@ export class GameEngine {
 
       if (pet.attackTimer > 0) continue;
 
-      if (pet.attackStyle === 'ranged' && targetDist <= 340) {
+      const biteDist = pet.radius + target.radius + 10;
+      if (pet.isElite && targetDist <= biteDist) {
+        pet.attackTimer = this.petAttackCooldown(pet);
+        this.petMeleeAttack(pet, target);
+      } else if ((pet.attackStyle === 'ranged' || pet.isElite) && targetDist <= 340) {
         pet.attackTimer = this.petAttackCooldown(pet);
         this.firePetProjectile(pet, target);
-      } else if (pet.attackStyle !== 'ranged') {
-        const biteDist = pet.radius + target.radius + 10;
-        if (targetDist <= biteDist) {
-          pet.attackTimer = this.petAttackCooldown(pet);
-          this.petMeleeAttack(pet, target);
-        }
+      } else if (pet.attackStyle !== 'ranged' && targetDist <= biteDist) {
+        pet.attackTimer = this.petAttackCooldown(pet);
+        this.petMeleeAttack(pet, target);
       }
     }
 
@@ -3039,25 +3042,29 @@ export class GameEngine {
     const dx = target.x - pet.x;
     const dy = target.y - pet.y;
     const dist = Math.hypot(dx, dy) || 1;
-    const speed = 430;
+    const speed = pet.isElite ? 470 : 430;
     const poison = pet.type === 'poison_dart_frog' || pet.attackStyle === 'venom';
     const isCrit = Math.random() < this.player.critChance;
     const critMultiplier = isCrit ? this.player.critMultiplier : 1;
+    // Tamed elites reuse the common yellow shot, scaled by their bulk.
+    const color = pet.isElite ? '#fbbf24' : pet.attackColor;
+    const radius = pet.isElite ? Math.max(11, pet.radius * 0.8) : poison ? 6 : 7;
+    const life = pet.isElite ? 1.7 : 1.4;
     this.petProjectiles.push({
       x: pet.x,
       y: pet.y - pet.radius * 0.4,
       vx: (dx / dist) * speed,
       vy: (dy / dist) * speed,
-      radius: poison ? 6 : 7,
-      damage: pet.damage * critMultiplier,
+      radius,
+      damage: pet.damage * (pet.isElite ? 1.35 : 1) * critMultiplier,
       crit: isCrit,
-      life: 1.4,
-      maxLife: 1.4,
-      color: pet.attackColor,
+      life,
+      maxLife: life,
+      color,
       poisonDps: poison ? pet.damage * 0.35 : undefined,
       poisonDuration: poison ? 2.6 : undefined,
     });
-    this.vfx.addSparks(pet.x, pet.y, pet.attackColor, 3);
+    this.vfx.addSparks(pet.x, pet.y, color, pet.isElite ? 5 : 3);
   }
 
   private updatePetProjectiles(dt: number): void {
@@ -3125,8 +3132,11 @@ export class GameEngine {
       enemy.type,
       enemy.name || 'Fera',
       Math.max(30, enemy.maxHp * 0.55),
-      10,
-      petAttackStyleFor(enemy.type)
+      // Elites keep a share of their own bite force, so their shots hit harder.
+      enemy.isElite ? Math.max(10, enemy.damage * 0.8) : 10,
+      petAttackStyleFor(enemy.type),
+      true,
+      enemy.isElite
     );
     pet.syncHeroLevel(this.player.level);
     this.applyPetBonuses(pet);
