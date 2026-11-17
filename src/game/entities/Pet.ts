@@ -1,4 +1,6 @@
 import { Camera } from '../engine/Camera';
+import type { EnemyType } from '../types';
+import { Enemy } from './Enemy';
 
 export type PetAttackStyle = 'melee' | 'venom' | 'ranged' | 'charge';
 
@@ -43,9 +45,9 @@ const EVOLUTION_HERO_LEVEL = 10;
 const LEVEL_GROWTH = 0.15;
 
 /**
- * A fauna companion tamed by the Domador de Feras. It chases the nearest
- * enemy, uses the hunting style of its original species and is always drawn
- * with a green/gold outline so it reads instantly as an ally.
+ * A fauna companion tamed by the Domador de Feras. It keeps the exact body of
+ * the creature it was in the wild (reusing the enemy renderer) and only gets a
+ * discreet green/gold ring under its feet so it still reads as an ally.
  */
 export class Pet {
   public x: number;
@@ -76,6 +78,8 @@ export class Pet {
   private syncedLevel: number = 1;
   private domadorHpMultiplier: number = 1;
   private domadorDamageMultiplier: number = 1;
+  /** Invisible enemy twin used only to draw the species' original body. */
+  private readonly visual: Enemy;
 
   constructor(
     x: number,
@@ -101,6 +105,12 @@ export class Pet {
     this.maxHp = this.baseMaxHp;
     this.hp = this.maxHp;
     this.damage = this.baseDamage;
+    // Draw the same creature body it had in the wild. The twin never takes
+    // part in combat: it only mirrors position/animation and is rendered
+    // without the elite/boss bars the enemy renderer would add.
+    this.visual = new Enemy(0, type as EnemyType, x, y);
+    this.visual.isElite = false;
+    this.visual.isBoss = false;
   }
 
   public get attackInterval(): number {
@@ -196,84 +206,57 @@ export class Pet {
   }
 
   public render(ctx: CanvasRenderingContext2D, camera: Camera): void {
-    if (!camera.isInView(this.x, this.y, 80)) return;
+    if (!camera.isInView(this.x, this.y, 160)) return;
 
     const screen = camera.worldToScreen(this.x, this.y);
-    const bob = Math.sin(this.animTimer * 8) * 1.6;
+
+    // Glowing ally aura: a soft halo around the body plus a pulsing ring on
+    // the ground. Gold for common tamed fauna, emerald once evolved.
+    const glowRgb = this.evolved ? '52, 211, 153' : '251, 191, 36';
+    const pulse = 0.75 + Math.sin(this.animTimer * 4) * 0.25;
+    const auraRadius = this.radius * (this.isElite ? 2.9 : 2.4);
 
     ctx.save();
-    ctx.translate(screen.x, screen.y + bob);
-    ctx.scale(this.facingX, 1);
-
-    // Green/gold ally aura; evolved pets glow brighter.
-    ctx.shadowColor = this.evolved ? '#34d399' : '#fbbf24';
-    ctx.shadowBlur = this.evolved ? 16 : 10;
-    ctx.strokeStyle = this.evolved ? 'rgba(52, 211, 153, 0.95)' : 'rgba(251, 191, 36, 0.85)';
-    ctx.lineWidth = this.evolved ? 2.6 : 2;
+    const halo = ctx.createRadialGradient(
+      screen.x,
+      screen.y,
+      this.radius * 0.35,
+      screen.x,
+      screen.y,
+      auraRadius
+    );
+    halo.addColorStop(0, `rgba(${glowRgb}, ${0.34 * pulse})`);
+    halo.addColorStop(0.6, `rgba(${glowRgb}, ${0.14 * pulse})`);
+    halo.addColorStop(1, `rgba(${glowRgb}, 0)`);
+    ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.arc(0, 0, this.radius * 1.55, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Little ground shadow.
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    ctx.beginPath();
-    ctx.ellipse(0, this.radius * 0.9, this.radius * 0.9, this.radius * 0.34, 0, 0, Math.PI * 2);
+    ctx.arc(screen.x, screen.y, auraRadius, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
 
-    // Body and head, outlined in gold/green.
-    ctx.fillStyle = this.evolved ? '#065f46' : '#166534';
-    ctx.strokeStyle = this.evolved ? '#34d399' : '#fbbf24';
-    ctx.lineWidth = 2;
+    ctx.save();
+    ctx.shadowColor = `rgb(${glowRgb})`;
+    ctx.shadowBlur = this.evolved ? 20 : 15;
+    ctx.strokeStyle = `rgba(${glowRgb}, ${0.9 * pulse})`;
+    ctx.lineWidth = this.evolved ? 2.8 : 2.2;
     ctx.beginPath();
-    ctx.ellipse(-2, 0, this.radius * 1.05, this.radius * 0.68, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(this.radius * 0.72, -this.radius * 0.28, this.radius * 0.55, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Ears and tail.
-    ctx.beginPath();
-    ctx.moveTo(this.radius * 0.5, -this.radius * 0.7);
-    ctx.lineTo(this.radius * 0.68, -this.radius * 1.2);
-    ctx.lineTo(this.radius * 0.86, -this.radius * 0.62);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(-this.radius * 1.0, 0);
-    ctx.quadraticCurveTo(
-      -this.radius * 1.7,
-      -this.radius * 0.5,
-      -this.radius * 1.45,
-      -this.radius * 1.0
+    ctx.ellipse(
+      screen.x,
+      screen.y + this.radius * 0.8,
+      this.radius * 1.35,
+      this.radius * 0.55,
+      0,
+      0,
+      Math.PI * 2
     );
     ctx.stroke();
-
-    // Friendly golden eye.
-    ctx.fillStyle = '#fde047';
-    ctx.beginPath();
-    ctx.arc(this.radius * 0.92, -this.radius * 0.38, 1.9, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Evolution crown mark.
-    if (this.evolved) {
-      ctx.fillStyle = '#fbbf24';
-      ctx.beginPath();
-      ctx.moveTo(-this.radius * 0.35, -this.radius * 1.35);
-      ctx.lineTo(-this.radius * 0.15, -this.radius * 1.75);
-      ctx.lineTo(0, -this.radius * 1.45);
-      ctx.lineTo(this.radius * 0.15, -this.radius * 1.75);
-      ctx.lineTo(this.radius * 0.35, -this.radius * 1.35);
-      ctx.closePath();
-      ctx.fill();
-    }
-
     ctx.restore();
+
+    // Same body, animation and facing the species uses in the wild.
+    this.visual.x = this.x;
+    this.visual.y = this.y;
+    this.visual.animTimer = this.animTimer;
+    this.visual.render(ctx, camera);
 
     // Health bar while wounded.
     if (this.hp < this.maxHp) {
