@@ -11,6 +11,9 @@ const AMAZON_BASIC_ENEMIES: EnemyType[] = [
   'leafcutter_ant',
   'blue_butterfly',
   'cicada',
+  // Nocturnal forest bat: regular fauna that used to appear only as a
+  // Matinta Pereira summon or through the DevTools spawn button.
+  'bat',
 ];
 
 const AMAZON_MEDIUM_ENEMIES: EnemyType[] = [

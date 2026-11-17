@@ -39,6 +39,7 @@ const AMAZON_DEV_MONSTERS: { type: EnemyType; label: string }[] = [
   { type: 'leafcutter_ant', label: '🐜 Formiga-cortadeira' },
   { type: 'blue_butterfly', label: '🦋 Borboleta-azul' },
   { type: 'cicada', label: '🦗 Cigarra' },
+  { type: 'bat', label: '🦇 Morcego' },
   { type: 'poison_dart_frog', label: '🐸 Rã-dardo-venenosa' },
   { type: 'praying_mantis', label: '🦗 Louva-a-deus' },
   { type: 'stick_bug', label: '🥢 Bicho-pau' },
@@ -1132,18 +1133,6 @@ export const DevTools: React.FC<DevToolsProps> = React.memo(function DevToolsPan
                           className="p-2 rounded-lg bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/80 text-amber-300 font-semibold text-[11px] transition cursor-pointer text-left"
                         >
                           🎯 Boneco Dummy (1M HP)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const engine = getEngine();
-                            if (!engine) return;
-                            engine.devSpawnEnemy('bat', spawnMultiplier);
-                            setTelemetry(engine.getDevTelemetry());
-                          }}
-                          className="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-semibold text-[11px] transition cursor-pointer text-left"
-                        >
-                          🦇 Morcego
                         </button>
                       </div>
 
