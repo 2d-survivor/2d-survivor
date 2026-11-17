@@ -1,44 +1,12 @@
 import { Camera } from '../engine/Camera';
+import {
+  getPetAttackProfile,
+  type PetAttackProfile,
+  type PetDelivery,
+  type PetRole,
+} from '../data/petAttacks';
 import type { EnemyType } from '../types';
 import { Enemy } from './Enemy';
-
-export type PetAttackStyle = 'melee' | 'venom' | 'ranged' | 'charge';
-
-/** Fauna species use their own hunting style once tamed. */
-export function petAttackStyleFor(type: string): PetAttackStyle {
-  switch (type) {
-    case 'poison_dart_frog':
-    case 'toucan':
-    case 'blue_butterfly':
-    case 'cicada':
-    case 'bat':
-      return 'ranged';
-    case 'bullet_ant':
-    case 'sawyer_beetle':
-    case 'giant_centipede':
-    case 'elite_goliath_spider':
-      return 'venom';
-    case 'rhino_beetle':
-    case 'capybara':
-    case 'piranha':
-    case 'pink_river_dolphin':
-    case 'giant_otter':
-    case 'baby_black_caiman':
-    case 'elite_jaguar':
-    case 'elite_tapir':
-    case 'elite_black_caiman':
-      return 'charge';
-    default:
-      return 'melee';
-  }
-}
-
-export function petAttackColor(style: PetAttackStyle, type: string): string {
-  if (type === 'poison_dart_frog' || style === 'venom') return '#84cc16';
-  if (style === 'charge') return '#f97316';
-  if (style === 'ranged') return '#fbbf24';
-  return '#4ade80';
-}
 
 const EVOLUTION_AGE = 60;
 const EVOLUTION_HERO_LEVEL = 10;
@@ -71,8 +39,13 @@ export class Pet {
   public readonly isElite: boolean;
   public readonly type: string;
   public readonly name: string;
-  public readonly attackStyle: PetAttackStyle;
+  /** Delivery/status/role matrix for this species. */
+  public readonly profile: PetAttackProfile;
+  public readonly role: PetRole;
+  public readonly delivery: PetDelivery;
   public readonly attackColor: string;
+  /** Pulses fired by this pet, used by the cicada's every-third stun. */
+  public pulseCount: number = 0;
   private readonly baseMaxHp: number;
   private readonly baseDamage: number;
   private syncedLevel: number = 1;
@@ -88,7 +61,6 @@ export class Pet {
     name: string,
     baseMaxHp: number,
     baseDamage: number,
-    attackStyle: PetAttackStyle,
     canEvolve: boolean = true,
     isElite: boolean = false
   ) {
@@ -99,8 +71,10 @@ export class Pet {
     this.isElite = isElite;
     this.baseMaxHp = Math.max(24, Math.round(baseMaxHp));
     this.baseDamage = Math.max(1, baseDamage);
-    this.attackStyle = attackStyle;
-    this.attackColor = petAttackColor(attackStyle, type);
+    this.profile = getPetAttackProfile(type);
+    this.role = this.profile.role;
+    this.delivery = this.profile.delivery;
+    this.attackColor = this.profile.color;
     this.canEvolve = canEvolve;
     this.maxHp = this.baseMaxHp;
     this.hp = this.maxHp;
@@ -114,16 +88,7 @@ export class Pet {
   }
 
   public get attackInterval(): number {
-    switch (this.attackStyle) {
-      case 'ranged':
-        return 1.1;
-      case 'venom':
-        return 0.9;
-      case 'charge':
-        return 1.4;
-      default:
-        return 0.75;
-    }
+    return this.profile.cooldown;
   }
 
   /** Hero levels grant +15% HP and damage per level (additive). */
@@ -198,7 +163,7 @@ export class Pet {
     // farther than the bite reach for small prey, so big pets (elites with
     // radius 17) parked out of range and never attacked.
     if (dist > this.radius + 8) {
-      const chargeBoost = this.attackStyle === 'charge' && dist > 120 ? 1.6 : 1;
+      const chargeBoost = this.profile.delivery === 'charge' && dist > 120 ? 1.6 : 1;
       const step = Math.min(dist, this.speed * chargeBoost * dt);
       this.x += (dx / dist) * step;
       this.y += (dy / dist) * step;

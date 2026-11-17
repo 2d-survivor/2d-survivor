@@ -412,6 +412,9 @@ export interface HUDState {
     maxHp: number;
     evolved: boolean;
     age: number;
+    /** Domador de Feras combat axes, shown in the pet bar tooltip. */
+    role?: string;
+    delivery?: string;
   }[];
   /** Domador de Feras pack behaviour, toggled with R or the HUD button. */
   petStance?: 'aggressive' | 'guard';

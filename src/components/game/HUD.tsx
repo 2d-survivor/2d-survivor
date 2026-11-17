@@ -5,6 +5,12 @@ import { ForestStagePanel } from './ForestStagePanel';
 import { COMPANIONS } from '@/game/data/companions';
 import { HUDState, EnemyType, SpecialAbilityHUD } from '@/game/types';
 import { HUNTER_FISH_TARGET } from '@/game/data/hunterQuest';
+import {
+  PET_DELIVERY_LABEL,
+  PET_ROLE_LABEL,
+  type PetDelivery,
+  type PetRole,
+} from '@/game/data/petAttacks';
 import { renderWeaponIcon, renderPassiveIcon, renderNamedIcon } from './GameIcons';
 import {
   Skull,
@@ -454,8 +460,14 @@ export const HUD: React.FC<HUDProps> = ({
                 const petHpPercent = Math.max(0, Math.min(100, (pet.hp / Math.max(1, pet.maxHp)) * 100));
                 const evolutionProgress =
                   pet.evolved || hud.level < 10 ? null : Math.min(100, (pet.age / 60) * 100);
+                const roleLabel = pet.role
+                  ? PET_ROLE_LABEL[pet.role as PetRole] ?? pet.role
+                  : null;
+                const deliveryLabel = pet.delivery
+                  ? PET_DELIVERY_LABEL[pet.delivery as PetDelivery] ?? pet.delivery
+                  : null;
                 const releaseLabel = `${pet.name} — ${pet.hp}/${pet.maxHp} HP${pet.evolved ? ' • Evoluído' : ''
-                  }\nAlt + Clique Direito para libertar`;
+                  }${roleLabel ? `\n${roleLabel}${deliveryLabel ? ` · ${deliveryLabel}` : ''}` : ''}\nAlt + Clique Direito para libertar`;
                 return (
                   <button
                     key={`${pet.type}-${index}`}

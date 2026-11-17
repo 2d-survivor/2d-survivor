@@ -74,6 +74,15 @@ export class Enemy {
   public bleedDps: number = 0;
   public bleedSourceWeapon: WeaponId | null = null;
   public dotTickTimer: number = 0.5;
+  /**
+   * Domador de Feras: marked prey (+25% damage from the whole pack) and
+   * taunted common fauna that temporarily chases the tank pet instead of the
+   * hero. Both are plain timers so they survive the existing status decay.
+   */
+  public petMarkTimer: number = 0;
+  public petTauntTimer: number = 0;
+  public petTauntX: number = 0;
+  public petTauntY: number = 0;
 
   // Elite / Boss Special Skill State
   public skillCooldown: number = 4.5;
@@ -711,7 +720,8 @@ export class Enemy {
       this.slowTimer > 0 ||
       this.vulnerableTimer > 0 ||
       this.poisonTimer > 0 ||
-      this.bleedTimer > 0
+      this.bleedTimer > 0 ||
+      this.petMarkTimer > 0
     );
   }
 
@@ -775,6 +785,8 @@ export class Enemy {
       this.vulnerableTimer -= dt;
       if (this.vulnerableTimer <= 0) this.vulnerableBonus = 0;
     }
+    if (this.petMarkTimer > 0) this.petMarkTimer = Math.max(0, this.petMarkTimer - dt);
+    if (this.petTauntTimer > 0) this.petTauntTimer = Math.max(0, this.petTauntTimer - dt);
     if (this.poisonTimer > 0) {
       this.poisonTimer -= dt;
       if (this.poisonTimer <= 0) {
@@ -806,10 +818,13 @@ export class Enemy {
     const dx = player.x - this.x;
     const dy = player.y - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    // Ecology target (beach or fruit tree) only replaces the standard walk;
-    // combat skills still aim at the hero.
-    const moveDx = (this.ecologyTargetX ?? player.x) - this.x;
-    const moveDy = (this.ecologyTargetY ?? player.y) - this.y;
+    // Taunted common fauna chases the tank pet instead of the hero; ecology
+    // targets (beach/fruit tree) only replace the standard walk.
+    const taunted = this.petTauntTimer > 0;
+    const walkTargetX = taunted ? this.petTauntX : this.ecologyTargetX ?? player.x;
+    const walkTargetY = taunted ? this.petTauntY : this.ecologyTargetY ?? player.y;
+    const moveDx = walkTargetX - this.x;
+    const moveDy = walkTargetY - this.y;
     const moveDist = Math.sqrt(moveDx * moveDx + moveDy * moveDy);
     const terrainMult = this.terrainSpeedMultiplier;
     const speedMult =

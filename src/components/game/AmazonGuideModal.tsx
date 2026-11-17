@@ -353,7 +353,7 @@ const HERO_WEAPON_LEVEL_ONE: Record<
 
 function describeCharacterPassive(character: CharacterConfig): string {
   if (character.id === 'domador_feras') {
-    return 'Aura de Doma: doma automaticamente a fauna liberada que morre dentro do alcance da aura, desde que haja espaço na matilha.';
+    return 'Aura de Doma: doma automaticamente a fauna liberada que morre dentro do alcance da aura, desde que haja espaço na matilha. Cada espécie domada tem entrega (corpo a corpo, projétil, investida ou pulso), marca (veneno, sangramento, lentidão, presa, atordoamento) e papel (Lâmina, Contaminador, Tanque, Batedor, Suporte). Presas marcadas levam +25% de dano de toda a matilha.';
   }
   const bonuses = character.statBonuses;
   const parts: string[] = [];

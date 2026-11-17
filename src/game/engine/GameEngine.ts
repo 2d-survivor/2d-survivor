@@ -39,7 +39,8 @@ import { GorillaBoss } from '../entities/GorillaBoss';
 import { AnacondaBoss } from '../entities/AnacondaBoss';
 import { AnacondaNpc } from '../entities/AnacondaNpc';
 import { EquipmentDrop } from '../entities/EquipmentDrop';
-import { Pet, petAttackStyleFor } from '../entities/Pet';
+import { Pet } from '../entities/Pet';
+import type { PetAttackProfile, PetStatusEffect } from '../data/petAttacks';
 import { ANACONDA } from '../data/anaconda';
 import { GORILLA_ARENA, GORILLA_LEAP, GORILLA_ROAR, GORILLA_SLAM_DAMAGE_MULTIPLIER } from '../data/gorilla';
 import { KOPENAWAS } from '../data/kopenawa';
@@ -94,13 +95,27 @@ interface PetProjectile {
   vx: number;
   vy: number;
   radius: number;
+  /** Raw pet damage before the profile/synergy multipliers. */
   damage: number;
+  /** Critical hit multiplier, rolled when the shot leaves the pet. */
+  critBonus: number;
   life: number;
   maxLife: number;
   color: string;
   crit: boolean;
-  poisonDps?: number;
-  poisonDuration?: number;
+  profile: PetAttackProfile;
+  statuses: PetStatusEffect[];
+  /** Extra enemies this shot may still pass through. */
+  pierce: number;
+  /** Enemies already hit, so a piercing shot never damages the same one twice. */
+  hit: Enemy[];
+}
+
+/** Minimal data a status needs from whoever applied it (pet or projectile). */
+interface PetStatusSource {
+  damage: number;
+  x: number;
+  y: number;
 }
 
 /** Zarabatana Tranquilizante dart: single-target, slows and can capture. */
@@ -457,6 +472,12 @@ export class GameEngine {
   private zarabatanaTimer = 0.5;
   private petCritCounter = 0;
   private petStance: 'aggressive' | 'guard' = 'aggressive';
+  /** Cicada/boto-style pack buffs: +attack speed for the whole matilha. */
+  private petHasteTimer = 0;
+  private petHasteBonus = 0;
+  /** Anta-style guard: nearby pets take less contact damage. */
+  private petShieldTimer = 0;
+  private petShieldReduction = 0;
   /**
    * Species the Aura de Doma may tame. Starts with every catalogued creature
    * unlocked; the HUD bar lets the player block or re-enable each one.
@@ -2644,7 +2665,8 @@ export class GameEngine {
   }
 
   private petAttackCooldown(pet: Pet): number {
-    return pet.attackInterval / this.petAttackSpeedMultiplier;
+    const haste = this.petHasteTimer > 0 ? 1 + this.petHasteBonus : 1;
+    return pet.attackInterval / (this.petAttackSpeedMultiplier * haste);
   }
 
   /**
@@ -2791,6 +2813,15 @@ export class GameEngine {
     if (!aggressive) {
       this.petOrbitAngle = (this.petOrbitAngle + dt * this.petOrbitSpeed) % (Math.PI * 2);
     }
+    // Pack buffs (cicada haste, anta shield) tick down with the pack.
+    if (this.petHasteTimer > 0) {
+      this.petHasteTimer = Math.max(0, this.petHasteTimer - dt);
+      if (this.petHasteTimer === 0) this.petHasteBonus = 0;
+    }
+    if (this.petShieldTimer > 0) {
+      this.petShieldTimer = Math.max(0, this.petShieldTimer - dt);
+      if (this.petShieldTimer === 0) this.petShieldReduction = 0;
+    }
     // Enemies already focused by a packmate this frame. Bosses are never
     // reserved, so the pack can still gang up on wave chiefs and guardians.
     const claimedTargets = new Set<Enemy>();
@@ -2806,11 +2837,13 @@ export class GameEngine {
       }
 
       const target = this.selectPetTarget(pet, claimedTargets, aggressive);
+      const ranged = pet.delivery === 'projectile' || pet.delivery === 'pulse';
+      const attackRange = pet.profile.range;
 
       if (!aggressive) {
-        // Guarda: a fera orbita o Domador. A distância atira do próprio anel,
-        // mas as de corpo a corpo dão um bote curto: sem isso o alcance de
-        // mordida ficava menor que o raio da órbita e as feras maiores
+        // Guarda: a fera orbita o Domador. As de alcance atacam do próprio
+        // anel, mas as de corpo a corpo dão um bote curto: sem isso o alcance
+        // de mordida ficava menor que o raio da órbita e as feras maiores
         // (elites com raio 17) giravam sem nunca encostar em ninguém.
         const slot = this.petOrbitSlot(i, petCount);
         if (!target) {
@@ -2820,12 +2853,12 @@ export class GameEngine {
         }
 
         const reach = Math.hypot(target.x - pet.x, target.y - pet.y);
-        if (pet.attackStyle === 'ranged') {
+        if (ranged) {
           pet.update(dt, slot.x, slot.y);
           if (this.damagePetOnContact(pet)) continue;
-          if (pet.attackTimer <= 0 && reach <= 340) {
+          if (pet.attackTimer <= 0 && reach <= attackRange) {
             pet.attackTimer = this.petAttackCooldown(pet);
-            this.firePetProjectile(pet, target);
+            this.petAttack(pet, target);
           }
           continue;
         }
@@ -2845,7 +2878,7 @@ export class GameEngine {
         const guardBiteDist = pet.radius + target.radius + 10;
         if (Math.hypot(target.x - pet.x, target.y - pet.y) <= guardBiteDist) {
           pet.attackTimer = this.petAttackCooldown(pet);
-          this.petMeleeAttack(pet, target);
+          this.petAttack(pet, target);
         }
         continue;
       }
@@ -2858,8 +2891,8 @@ export class GameEngine {
       }
 
       const targetDist = Math.hypot(target.x - pet.x, target.y - pet.y);
-      if (pet.attackStyle === 'ranged' && targetDist <= 260) {
-        // Ranged fauna keeps its distance and spits from afar.
+      if (ranged && targetDist <= attackRange * 0.75) {
+        // Ranged fauna keeps its distance and strikes from afar.
         pet.update(dt, null, null);
       } else {
         pet.update(dt, target.x, target.y);
@@ -2868,13 +2901,10 @@ export class GameEngine {
 
       if (pet.attackTimer > 0) continue;
 
-      const biteDist = pet.radius + target.radius + 10;
-      if (pet.attackStyle === 'ranged' && targetDist <= 340) {
+      const reach = ranged ? attackRange : pet.radius + target.radius + 10;
+      if (targetDist <= reach) {
         pet.attackTimer = this.petAttackCooldown(pet);
-        this.firePetProjectile(pet, target);
-      } else if (pet.attackStyle !== 'ranged' && targetDist <= biteDist) {
-        pet.attackTimer = this.petAttackCooldown(pet);
-        this.petMeleeAttack(pet, target);
+        this.petAttack(pet, target);
       }
     }
 
@@ -2904,13 +2934,16 @@ export class GameEngine {
       if (!this.isPetTargetInReach(enemy, aggressive)) continue;
 
       const distSq = this.petTargetDistanceSq(pet, enemy, aggressive);
+      // Executioners (jaguar, otter) actively hunt the prey the scouts marked.
+      const huntsMarked = pet.profile.bonusVsMarked !== undefined;
+      const scoring = huntsMarked && enemy.petMarkTimer > 0 ? distSq * 0.3 : distSq;
       if (distSq < anyDistSq) {
         anyDistSq = distSq;
         anyTarget = enemy;
       }
       // Wave chiefs and arena guardians may always be focused by the whole pack.
-      if ((enemy.isBoss || !claimed.has(enemy)) && distSq < freeDistSq) {
-        freeDistSq = distSq;
+      if ((enemy.isBoss || !claimed.has(enemy)) && scoring < freeDistSq) {
+        freeDistSq = scoring;
         freeTarget = enemy;
       }
     }
@@ -3020,7 +3053,9 @@ export class GameEngine {
 
       pet.contactTimer = 1.2;
       const rawDamage = Math.max(1, Math.round(enemy.damage * 0.5));
-      const damage = Math.max(1, rawDamage - pet.armor);
+      const guarded =
+        this.petShieldTimer > 0 ? rawDamage * (1 - this.petShieldReduction) : rawDamage;
+      const damage = Math.max(1, Math.round(guarded) - pet.armor);
       pet.hp -= damage;
       this.vfx.addSparks(pet.x, pet.y, '#f87171', 4);
       if (pet.hp <= 0) {
@@ -3036,66 +3071,258 @@ export class GameEngine {
     return false;
   }
 
-  private petMeleeAttack(pet: Pet, target: Enemy): void {
+  /**
+   * Single entry point for every species: `delivery` picks the shape of the
+   * blow, `statuses` decide what it leaves behind.
+   */
+  private petAttack(pet: Pet, target: Enemy): void {
+    switch (pet.delivery) {
+      case 'projectile':
+        this.firePetProjectile(pet, target);
+        return;
+      case 'pulse':
+        this.petPulseAttack(pet, target);
+        return;
+      default:
+        this.petStrike(pet, target);
+    }
+  }
+
+  /** Melee bite and charge slam share damage, knockback and status maths. */
+  private petStrike(pet: Pet, target: Enemy): void {
+    const charge = pet.delivery === 'charge';
+    const { damage, isCrit } = this.rollPetDamage(pet, target);
     const dx = target.x - pet.x;
     const dy = target.y - pet.y;
     const dist = Math.hypot(dx, dy) || 1;
-    const isCharge = pet.attackStyle === 'charge';
-    const isCrit = Math.random() < this.player.critChance;
-    const critMultiplier = isCrit ? this.player.critMultiplier : 1;
-    const rawDamage = pet.damage * (isCharge ? 1.35 : 1) * critMultiplier;
-    const damage = target.computeDamageTaken(rawDamage, this.player.debuffDamageBonus);
-    const dead = target.takeDamage(
-      damage,
-      dx / dist,
-      dy / dist,
-      isCharge ? 260 : pet.attackStyle === 'venom' ? 70 : 90
-    );
+    const knockback = pet.profile.knockback ?? (charge ? 260 : 90);
+    const dead = target.takeDamage(damage, dx / dist, dy / dist, knockback);
     this.vfx.addDamageNumber(target.x, target.y - 6, damage, isCrit);
-    this.vfx.addSparks(target.x, target.y, pet.attackColor, isCharge ? 8 : 4);
+    this.vfx.addSparks(target.x, target.y, pet.attackColor, charge ? 8 : 4);
     if (isCrit) this.registerPetCrit();
-
-    if (isCharge) {
+    if (charge) {
       this.weaponSystem.spawnRingPulse(target.x, target.y, 34, pet.attackColor, 0.24);
     }
-    if (pet.attackStyle === 'venom') {
-      target.applyPoison(
-        pet.damage * 0.4,
-        2.8,
-        'mordida_piranha',
-        false
-      );
-    }
-
+    this.applyPetStatuses(pet, target, pet.profile.statuses);
     if (dead) this.onEnemyKilled(target);
   }
 
+  /**
+   * Area attacks: a boto sonar, a cicada song or a lacraia venom spray hits
+   * several enemies around the primary target. Pack buffs (haste/shield) are
+   * applied once, no matter how many enemies the pulse touches.
+   */
+  private petPulseAttack(pet: Pet, target: Enemy): void {
+    pet.pulseCount += 1;
+    const profile = pet.profile;
+    const radius = profile.splash ?? 110;
+    const maxTargets = profile.maxTargets ?? 3;
+
+    for (const effect of profile.statuses) {
+      if (effect.kind === 'haste' || effect.kind === 'shield') {
+        this.applyPetStatus(pet, target, effect);
+      }
+    }
+
+    const nearby: { enemy: Enemy; distSq: number }[] = [];
+    for (let i = 0; i < this.enemies.length; i++) {
+      const enemy = this.enemies[i];
+      if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+      const dx = enemy.x - target.x;
+      const dy = enemy.y - target.y;
+      const distSq = dx * dx + dy * dy;
+      if (enemy !== target && distSq > radius * radius) continue;
+      nearby.push({ enemy, distSq: enemy === target ? -1 : distSq });
+    }
+    nearby.sort((a, b) => a.distSq - b.distSq);
+
+    const statuses = profile.statuses.filter(
+      (effect) =>
+        effect.kind !== 'haste' &&
+        effect.kind !== 'shield' &&
+        // A cigarra only stuns every third song.
+        (effect.kind !== 'stun' || pet.type !== 'cicada' || pet.pulseCount % 3 === 0)
+    );
+
+    for (let i = 0; i < Math.min(maxTargets, nearby.length); i++) {
+      const enemy = nearby[i].enemy;
+      const { damage, isCrit } = this.rollPetDamage(pet, enemy);
+      const dead = enemy.takeDamage(damage, 0, 0, 0);
+      this.vfx.addDamageNumber(enemy.x, enemy.y - 6, damage, isCrit);
+      this.vfx.addSparks(enemy.x, enemy.y, pet.attackColor, 3);
+      if (isCrit) this.registerPetCrit();
+      this.applyPetStatuses(pet, enemy, statuses);
+      if (dead) this.onEnemyKilled(enemy);
+    }
+
+    this.weaponSystem.spawnRingPulse(target.x, target.y, radius, pet.attackColor, 0.35);
+    this.vfx.addSparks(target.x, target.y, pet.attackColor, 5);
+  }
+
+  private rollPetDamage(pet: Pet, target: Enemy): { damage: number; isCrit: boolean } {
+    const isCrit = Math.random() < this.player.critChance;
+    const critMultiplier = isCrit ? this.player.critMultiplier : 1;
+    const raw =
+      pet.damage * this.petSynergyMultiplier(pet.profile, target) * critMultiplier;
+    return {
+      damage: target.computeDamageTaken(raw, this.player.debuffDamageBonus),
+      isCrit,
+    };
+  }
+
+  /**
+   * Damage multipliers born from the synergy rules:
+   *  - marked prey takes +25% from the whole pack;
+   *  - species trade-offs (executor, mantis, caiman) stack their conditional;
+   *  - the piranha feeds on pack focus.
+   */
+  private petSynergyMultiplier(profile: PetAttackProfile, target: Enemy): number {
+    let multiplier = profile.damageMultiplier;
+    const marked = target.petMarkTimer > 0;
+    if (marked) multiplier *= 1.25;
+
+    let conditional = 1;
+    if (marked) conditional = Math.max(conditional, profile.bonusVsMarked ?? 1);
+    if (target.hp / Math.max(1, target.maxHp) <= 0.3) {
+      conditional = Math.max(conditional, profile.bonusVsLowHp ?? 1);
+    }
+    if (target.stunTimer > 0) {
+      conditional = Math.max(conditional, profile.bonusVsStunned ?? 1);
+    }
+    if (target.bleedTimer > 0) {
+      conditional = Math.max(conditional, profile.bonusVsBleeding ?? 1);
+    }
+    multiplier *= conditional;
+
+    if (profile.bonusPerAllyFocus) {
+      multiplier *= 1 + Math.min(5, this.petFocusCount(target)) * profile.bonusPerAllyFocus;
+    }
+    return multiplier;
+  }
+
+  /** Packmates (and this pet) already close to the target, for the piranha. */
+  private petFocusCount(target: Enemy): number {
+    let count = 0;
+    for (let i = 0; i < this.pets.length; i++) {
+      const other = this.pets[i];
+      if (Math.hypot(other.x - target.x, other.y - target.y) <= 160) count += 1;
+    }
+    return count;
+  }
+
+  private applyPetStatuses(
+    source: PetStatusSource,
+    enemy: Enemy,
+    statuses: PetStatusEffect[]
+  ): void {
+    for (const effect of statuses) {
+      if (effect.chance !== undefined && Math.random() > effect.chance) continue;
+      this.applyPetStatus(source, enemy, effect);
+    }
+  }
+
+  private applyPetStatus(
+    source: PetStatusSource,
+    enemy: Enemy,
+    effect: PetStatusEffect
+  ): void {
+    const duration = effect.duration ?? 3;
+    switch (effect.kind) {
+      case 'poison': {
+        // Veneno + Lentidão: the DoT ticks 50% harder on a slowed target.
+        const slowed = enemy.slowTimer > 0;
+        const base = source.damage * (effect.power ?? 0.3) * (slowed ? 1.5 : 1);
+        const stacks = effect.maxStacks ?? 1;
+        const current = enemy.poisonTimer > 0 ? enemy.poisonDps : 0;
+        enemy.applyPoison(
+          Math.min(base * stacks, Math.max(base, current + base)),
+          duration,
+          'mordida_piranha',
+          false
+        );
+        break;
+      }
+      case 'bleed': {
+        const dpsAdd = source.damage * (effect.power ?? 0.2);
+        const maxDps = source.damage * (effect.maxStacks ?? 4) * (effect.power ?? 0.2);
+        // Cortadeira: enquanto o alvo está envenenado o sangramento é mantido.
+        const held = enemy.poisonTimer > 0 ? Math.max(duration, enemy.poisonTimer + 0.5) : duration;
+        enemy.applyBleed(dpsAdd, maxDps, held, 'mordida_piranha');
+        break;
+      }
+      case 'slow':
+        enemy.applySlow(effect.power ?? 0.25, duration);
+        break;
+      case 'pin':
+      case 'stun':
+        enemy.applyStun(duration);
+        break;
+      case 'mark':
+        enemy.petMarkTimer = Math.max(enemy.petMarkTimer, duration);
+        break;
+      case 'vulnerable':
+        enemy.applyVulnerability(effect.power ?? 0.1, duration);
+        break;
+      case 'drain':
+        this.player.heal(effect.power ?? 1);
+        this.vfx.addSparks(this.player.x, this.player.y, '#c084fc', 3);
+        break;
+      case 'taunt':
+        // Only common fauna is provoked; elites and bosses keep their focus.
+        if (enemy.isElite || enemy.isBoss) break;
+        enemy.petTauntTimer = Math.max(enemy.petTauntTimer, duration);
+        enemy.petTauntX = source.x;
+        enemy.petTauntY = source.y;
+        break;
+      case 'haste':
+        this.petHasteBonus = Math.max(this.petHasteBonus, effect.power ?? 0.15);
+        this.petHasteTimer = Math.max(this.petHasteTimer, duration);
+        break;
+      case 'shield':
+        this.petShieldReduction = Math.max(this.petShieldReduction, effect.power ?? 0.2);
+        this.petShieldTimer = Math.max(this.petShieldTimer, duration);
+        break;
+    }
+  }
+
   private firePetProjectile(pet: Pet, target: Enemy): void {
+    const profile = pet.profile;
     const dx = target.x - pet.x;
     const dy = target.y - pet.y;
     const dist = Math.hypot(dx, dy) || 1;
+    const baseX = dx / dist;
+    const baseY = dy / dist;
     const speed = pet.isElite ? 470 : 430;
-    const poison = pet.type === 'poison_dart_frog' || pet.attackStyle === 'venom';
-    const isCrit = Math.random() < this.player.critChance;
-    const critMultiplier = isCrit ? this.player.critMultiplier : 1;
-    // Tamed elites reuse the common yellow shot, scaled by their bulk.
+    const statuses = profile.statuses;
+    const poisonShot = statuses.some((effect) => effect.kind === 'poison');
     const color = pet.isElite ? '#fbbf24' : pet.attackColor;
-    const radius = pet.isElite ? Math.max(11, pet.radius * 0.8) : poison ? 6 : 7;
+    const radius = pet.isElite ? Math.max(11, pet.radius * 0.8) : poisonShot ? 6 : 7;
     const life = pet.isElite ? 1.7 : 1.4;
-    this.petProjectiles.push({
-      x: pet.x,
-      y: pet.y - pet.radius * 0.4,
-      vx: (dx / dist) * speed,
-      vy: (dy / dist) * speed,
-      radius,
-      damage: pet.damage * (pet.isElite ? 1.35 : 1) * critMultiplier,
-      crit: isCrit,
-      life,
-      maxLife: life,
-      color,
-      poisonDps: poison ? pet.damage * 0.35 : undefined,
-      poisonDuration: poison ? 2.6 : undefined,
-    });
+    const volley = profile.volley ?? 1;
+    const spread = volley > 1 ? 0.13 : 0;
+
+    for (let shot = 0; shot < volley; shot++) {
+      const offset = (shot - (volley - 1) / 2) * spread;
+      const cos = Math.cos(offset);
+      const sin = Math.sin(offset);
+      const isCrit = Math.random() < this.player.critChance;
+      this.petProjectiles.push({
+        x: pet.x,
+        y: pet.y - pet.radius * 0.4,
+        vx: (baseX * cos - baseY * sin) * speed,
+        vy: (baseX * sin + baseY * cos) * speed,
+        radius,
+        damage: pet.damage * (pet.isElite ? 1.35 : 1),
+        critBonus: isCrit ? this.player.critMultiplier : 1,
+        crit: isCrit,
+        life,
+        maxLife: life,
+        color,
+        profile,        statuses,
+        pierce: profile.pierce ?? 0,
+        hit: [],
+      });
+    }
     this.vfx.addSparks(pet.x, pet.y, color, pet.isElite ? 5 : 3);
   }
 
@@ -3110,28 +3337,34 @@ export class GameEngine {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
 
-      let hit = false;
+      let spent = false;
       for (let j = 0; j < this.enemies.length; j++) {
         const enemy = this.enemies[j];
         if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+        if (p.hit.includes(enemy)) continue;
         const dx = enemy.x - p.x;
         const dy = enemy.y - p.y;
         if (dx * dx + dy * dy > (p.radius + enemy.radius) * (p.radius + enemy.radius)) continue;
 
-        const damage = enemy.computeDamageTaken(p.damage, this.player.debuffDamageBonus);
+        const raw = p.damage * p.critBonus * this.petSynergyMultiplier(p.profile, enemy);
+        const damage = enemy.computeDamageTaken(raw, this.player.debuffDamageBonus);
         const dist = Math.hypot(dx, dy) || 1;
         const dead = enemy.takeDamage(damage, dx / dist, dy / dist, 80);
         this.vfx.addDamageNumber(enemy.x, enemy.y - 6, damage, p.crit);
         this.vfx.addSparks(enemy.x, enemy.y, p.color, 4);
         if (p.crit) this.registerPetCrit();
-        if (p.poisonDps && p.poisonDuration) {
-          enemy.applyPoison(p.poisonDps, p.poisonDuration, 'mordida_piranha', false);
-        }
+        this.applyPetStatuses({ damage: p.damage, x: p.x, y: p.y }, enemy, p.statuses);
         if (dead) this.onEnemyKilled(enemy);
-        hit = true;
-        break;
+
+        p.hit.push(enemy);
+        if (p.pierce > 0) {
+          p.pierce -= 1;
+        } else {
+          spent = true;
+          break;
+        }
       }
-      if (hit) this.petProjectiles.splice(i, 1);
+      if (spent) this.petProjectiles.splice(i, 1);
     }
   }
 
@@ -3166,7 +3399,6 @@ export class GameEngine {
       Math.max(30, enemy.maxHp * 0.55),
       // Elites keep a share of their own bite force, so their shots hit harder.
       enemy.isElite ? Math.max(10, enemy.damage * 0.8) : 10,
-      petAttackStyleFor(enemy.type),
       true,
       enemy.isElite
     );
@@ -3653,6 +3885,8 @@ export class GameEngine {
       maxHp: Math.round(pet.maxHp),
       evolved: pet.evolved,
       age: pet.age,
+      role: pet.role,
+      delivery: pet.delivery,
     }));
 
     const activeBoss = this.waveDirector.bossActive
@@ -3811,6 +4045,21 @@ export class GameEngine {
         ctx.stroke();
         ctx.restore();
       }
+    }
+
+    // Presa: pets' marks glow pink over the target so the pack focus reads.
+    for (let i = 0; i < this.enemies.length; i++) {
+      const enemy = this.enemies[i];
+      if (enemy.petMarkTimer <= 0 || enemy.isSubmerged) continue;
+      const screen = camera.worldToScreen(enemy.x, enemy.y);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(244, 114, 182, 0.85)';
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y - enemy.radius * 0.4, enemy.radius * 1.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
 
     // Match the player's depth at the NPC's feet without adding it to combat.
