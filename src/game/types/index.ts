@@ -374,6 +374,21 @@ export interface SpecialAbilityHUD {
   cooldownMax: number;
   unlocked: boolean;
   active?: boolean;
+  /** Emoji shown in the slot, chosen by the engine per character. */
+  icon?: string;
+  /** Whether the slot recharges by time or by the pack fury bar. */
+  resource?: 'cooldown' | 'fury';
+  /** Fury spent to cast (Domador de Feras only). */
+  cost?: number;
+  /** Short text shown while the slot is locked (e.g. "3/10 espécies"). */
+  unlockHint?: string;
+}
+
+/** Domador de Feras pack energy, charged by kills and taming. */
+export interface SpecialEnergyHUD {
+  value: number;
+  max: number;
+  label: string;
 }
 
 export interface HUDState {
@@ -439,6 +454,8 @@ export interface HUDState {
   eventAlert?: string;
   objectives?: MissionObjectivesHUD;
   specialAbilities?: SpecialAbilityHUD[];
+  /** Domador de Feras: pack fury bar shown above the special slots. */
+  specialEnergy?: SpecialEnergyHUD;
 }
 
 export interface GameEndSummary {

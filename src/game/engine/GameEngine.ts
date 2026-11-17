@@ -260,6 +260,16 @@ const SPECIAL_3_WAVE_RADIUS = 150;
 const SPECIAL_3_WAVE_DAMAGE = 16;
 const SPECIAL_3_PUSH_FORCE = 180;
 
+// Domador de Feras specials. They are paid with pack fury instead of time.
+const BEAST_HOWL_DURATION = 6;
+const BEAST_WALL_DURATION = 5;
+const BEAST_WALL_TAUNT_DURATION = 3;
+const BEAST_WALL_RING_RADIUS = 150;
+const BEAST_WALL_TAUNT_RADIUS = 320;
+const BEAST_WALL_PUSH_FORCE = 180;
+const BEAST_WALL_HERO_REDUCTION = 0.2;
+const BEAST_ANCESTRAL_DURATION = 10;
+
 export class GameEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -478,6 +488,14 @@ export class GameEngine {
   /** Anta-style guard: nearby pets take less contact damage. */
   private petShieldTimer = 0;
   private petShieldReduction = 0;
+  /** Domador specials: pack fury, charged by kills and taming. */
+  private petFury = 0;
+  private readonly petFuryMax = 100;
+  private petHowlTimer = 0;
+  private petWallTimer = 0;
+  private petAncestralTimer = 0;
+  /** Species tamed at least once in this run (the special unlock track). */
+  private tamedSpeciesThisRun = new Set<EnemyType>();
   /**
    * Species the Aura de Doma may tame. Starts with every catalogued creature
    * unlocked; the HUD bar lets the player block or re-enable each one.
@@ -737,7 +755,14 @@ export class GameEngine {
   }
 
   private activateSpecial(slot: number): void {
-    if (this.player.character.id !== 'derson' || this.insideCave) return;
+    if (this.insideCave) return;
+
+    if (this.isBeastmaster()) {
+      this.activateBeastmasterSpecial(slot);
+      return;
+    }
+
+    if (this.player.character.id !== 'derson') return;
 
     if (slot === 2) {
       if (this.special2Cooldown > 0) return;
@@ -781,6 +806,95 @@ export class GameEngine {
     this.specialPrevX = this.player.x;
     this.specialPrevY = this.player.y;
     this.specialHitEnemies = new WeakSet<Enemy>();
+  }
+
+  /**
+   * Domador de Feras: the three pack specials are cast with the shared fury
+   * bar. Slot 1 is always available, slots 2 and 3 unlock by taming distinct
+   * species (or by level as a fallback).
+   */
+  private activateBeastmasterSpecial(slot: number): void {
+    if (slot < 1 || slot > 3) return;
+    if (!this.petSpecialUnlocked(slot)) return;
+
+    const cost = this.petSpecialCost(slot);
+    if (this.petFury < cost) return;
+
+    if (slot === 1) {
+      // Uivo Ancestral: pack haste, pack damage and Presa on every blow.
+      this.petFury -= cost;
+      this.petHowlTimer = Math.max(this.petHowlTimer, BEAST_HOWL_DURATION);
+      this.weaponSystem.spawnRingPulse(this.player.x, this.player.y, 120, '#fbbf24', 0.45);
+      this.vfx.addSparks(this.player.x, this.player.y, '#fbbf24', 20);
+      this.sound.playSlash();
+      this.camera.shake(0.12, 4);
+      this.syncHUD();
+      return;
+    }
+
+    if (slot === 2) {
+      // Muralha de Presas: the pack forms a ring, provokes the fauna and
+      // shields both the hero and the pack for five seconds.
+      this.petFury -= cost;
+      this.petWallTimer = Math.max(this.petWallTimer, BEAST_WALL_DURATION);
+      this.player.damageReductionTimer = Math.max(
+        this.player.damageReductionTimer,
+        BEAST_WALL_DURATION
+      );
+      this.player.damageReductionBonus = BEAST_WALL_HERO_REDUCTION;
+
+      const petCount = Math.max(1, this.pets.length);
+      for (let i = 0; i < this.pets.length; i++) {
+        const pet = this.pets[i];
+        const angle = (i * Math.PI * 2) / petCount;
+        pet.x = this.player.x + Math.cos(angle) * BEAST_WALL_RING_RADIUS;
+        pet.y = this.player.y + Math.sin(angle) * BEAST_WALL_RING_RADIUS;
+      }
+
+      const tauntSq = BEAST_WALL_TAUNT_RADIUS * BEAST_WALL_TAUNT_RADIUS;
+      for (let i = 0; i < this.enemies.length; i++) {
+        const enemy = this.enemies[i];
+        if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+        const dx = enemy.x - this.player.x;
+        const dy = enemy.y - this.player.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq > tauntSq) continue;
+
+        // Only common fauna is provoked; elites and bosses keep their focus.
+        if (!enemy.isElite && !enemy.isBoss) {
+          enemy.petTauntTimer = Math.max(enemy.petTauntTimer, BEAST_WALL_TAUNT_DURATION);
+          const ring = this.pets[i % petCount];
+          enemy.petTauntX = ring ? ring.x : this.player.x;
+          enemy.petTauntY = ring ? ring.y : this.player.y;
+        }
+
+        const dist = Math.max(1, Math.sqrt(distSq));
+        enemy.takeDamage(0, dx / dist, dy / dist, BEAST_WALL_PUSH_FORCE);
+      }
+
+      this.weaponSystem.spawnRingPulse(this.player.x, this.player.y, BEAST_WALL_TAUNT_RADIUS, '#fbbf24', 0.5);
+      this.vfx.addSparks(this.player.x, this.player.y, '#fbbf24', 22);
+      this.sound.playSlash();
+      this.camera.shake(0.2, 6);
+      this.syncHUD();
+      return;
+    }
+
+    // Chamado dos Ancestrais: triple aura, pack fully healed and enraged.
+    this.petFury -= cost;
+    this.petAncestralTimer = Math.max(this.petAncestralTimer, BEAST_ANCESTRAL_DURATION);
+    for (let i = 0; i < this.pets.length; i++) this.pets[i].hp = this.pets[i].maxHp;
+    this.weaponSystem.spawnRingPulse(
+      this.player.x,
+      this.player.y,
+      this.domaAuraRadius,
+      '#34d399',
+      0.7
+    );
+    this.vfx.addSparks(this.player.x, this.player.y, '#34d399', 26);
+    this.sound.playLevelUp();
+    this.camera.shake(0.24, 7);
+    this.syncHUD();
   }
 
   /** Corte de Giro: one expanding sound wave that damages and shoves enemies. */
@@ -2604,9 +2718,59 @@ export class GameEngine {
     return this.petUpgradeLevels.elo_vital * 0.01;
   }
 
-  /** Doma Rápida widens the aura from 280 to 430 units. */
+  /** Doma Rápida widens the aura from 280 to 430 units; the ult triples it. */
   private get domaAuraRadius(): number {
-    return 280 + this.petUpgradeLevels.doma_rapida * 30;
+    const base = 280 + this.petUpgradeLevels.doma_rapida * 30;
+    return this.petAncestralTimer > 0 ? base * 3 : base;
+  }
+
+  /** Uivo Ancestral and Chamado dos Ancestrais stack their pack damage. */
+  private get petSpecialDamageBonus(): number {
+    let bonus = 1;
+    if (this.petHowlTimer > 0) bonus += 0.25;
+    if (this.petAncestralTimer > 0) bonus += 0.5;
+    return bonus;
+  }
+
+  private petSpecialCost(slot: number): number {
+    if (slot === 1) return 40;
+    if (slot === 2) return 65;
+    if (slot === 3) return 100;
+    return 0;
+  }
+
+  /**
+   * Slot 1 is free. Slot 2 needs 10 distinct species tamed this run (or level
+   * 15) and slot 3 needs 17 (or level 30), so the pack's own progression is
+   * the unlock track while an unlucky run still has a guaranteed fallback.
+   */
+  private petSpecialUnlocked(slot: number): boolean {
+    if (!this.isBeastmaster()) return false;
+    if (slot === 1) return true;
+    if (slot === 2) {
+      return this.tamedSpeciesThisRun.size >= 10 || this.player.level >= 15;
+    }
+    if (slot === 3) {
+      return this.tamedSpeciesThisRun.size >= 17 || this.player.level >= 30;
+    }
+    return false;
+  }
+
+  private petSpecialSpeciesTarget(slot: number): number {
+    return slot === 3 ? 17 : 10;
+  }
+
+  private addPetFury(amount: number): void {
+    if (!this.isBeastmaster() || amount <= 0) return;
+    this.petFury = Math.min(this.petFuryMax, this.petFury + amount);
+  }
+
+  private updatePetSpecialTimers(dt: number): void {
+    if (this.petHowlTimer > 0) this.petHowlTimer = Math.max(0, this.petHowlTimer - dt);
+    if (this.petWallTimer > 0) this.petWallTimer = Math.max(0, this.petWallTimer - dt);
+    if (this.petAncestralTimer > 0) {
+      this.petAncestralTimer = Math.max(0, this.petAncestralTimer - dt);
+    }
   }
 
   private applyPetBonuses(pet: Pet): void {
@@ -2666,7 +2830,8 @@ export class GameEngine {
 
   private petAttackCooldown(pet: Pet): number {
     const haste = this.petHasteTimer > 0 ? 1 + this.petHasteBonus : 1;
-    return pet.attackInterval / (this.petAttackSpeedMultiplier * haste);
+    const howl = this.petHowlTimer > 0 ? 1.4 : 1;
+    return pet.attackInterval / (this.petAttackSpeedMultiplier * haste * howl);
   }
 
   /**
@@ -2814,6 +2979,7 @@ export class GameEngine {
       this.petOrbitAngle = (this.petOrbitAngle + dt * this.petOrbitSpeed) % (Math.PI * 2);
     }
     // Pack buffs (cicada haste, anta shield) tick down with the pack.
+    this.updatePetSpecialTimers(dt);
     if (this.petHasteTimer > 0) {
       this.petHasteTimer = Math.max(0, this.petHasteTimer - dt);
       if (this.petHasteTimer === 0) this.petHasteBonus = 0;
@@ -3053,8 +3219,13 @@ export class GameEngine {
 
       pet.contactTimer = 1.2;
       const rawDamage = Math.max(1, Math.round(enemy.damage * 0.5));
-      const guarded =
-        this.petShieldTimer > 0 ? rawDamage * (1 - this.petShieldReduction) : rawDamage;
+      // Anta guard (couraça) and Muralha de Presas stack multiplicatively, but
+      // the pack never becomes fully immune: total mitigation caps at 80%.
+      let mitigation = 0;
+      if (this.petShieldTimer > 0) mitigation = this.petShieldReduction;
+      if (this.petWallTimer > 0) mitigation = 1 - (1 - mitigation) * (1 - 0.3);
+      mitigation = Math.min(0.8, Math.max(0, mitigation));
+      const guarded = rawDamage * (1 - mitigation);
       const damage = Math.max(1, Math.round(guarded) - pet.armor);
       pet.hp -= damage;
       this.vfx.addSparks(pet.x, pet.y, '#f87171', 4);
@@ -3104,7 +3275,7 @@ export class GameEngine {
       this.weaponSystem.spawnRingPulse(target.x, target.y, 34, pet.attackColor, 0.24);
     }
     this.applyPetStatuses(pet, target, pet.profile.statuses);
-    if (dead) this.onEnemyKilled(target);
+    if (dead) this.onEnemyKilled(target, 'pet');
   }
 
   /**
@@ -3152,7 +3323,7 @@ export class GameEngine {
       this.vfx.addSparks(enemy.x, enemy.y, pet.attackColor, 3);
       if (isCrit) this.registerPetCrit();
       this.applyPetStatuses(pet, enemy, statuses);
-      if (dead) this.onEnemyKilled(enemy);
+      if (dead) this.onEnemyKilled(enemy, 'pet');
     }
 
     this.weaponSystem.spawnRingPulse(target.x, target.y, radius, pet.attackColor, 0.35);
@@ -3197,6 +3368,9 @@ export class GameEngine {
     if (profile.bonusPerAllyFocus) {
       multiplier *= 1 + Math.min(5, this.petFocusCount(target)) * profile.bonusPerAllyFocus;
     }
+
+    // Uivo Ancestral / Chamado dos Ancestrais buff the whole pack's bite.
+    multiplier *= this.petSpecialDamageBonus;
     return multiplier;
   }
 
@@ -3218,6 +3392,12 @@ export class GameEngine {
     for (const effect of statuses) {
       if (effect.chance !== undefined && Math.random() > effect.chance) continue;
       this.applyPetStatus(source, enemy, effect);
+    }
+
+    // Uivo Ancestral: every pack blow leaves the prey marked (Presa) for 5s,
+    // which feeds the whole synergy web (+25% pack damage and mark bonuses).
+    if (this.petHowlTimer > 0 && enemy.hp > 0) {
+      enemy.petMarkTimer = Math.max(enemy.petMarkTimer, 5);
     }
   }
 
@@ -3354,7 +3534,7 @@ export class GameEngine {
         this.vfx.addSparks(enemy.x, enemy.y, p.color, 4);
         if (p.crit) this.registerPetCrit();
         this.applyPetStatuses({ damage: p.damage, x: p.x, y: p.y }, enemy, p.statuses);
-        if (dead) this.onEnemyKilled(enemy);
+        if (dead) this.onEnemyKilled(enemy, 'pet');
 
         p.hit.push(enemy);
         if (p.pierce > 0) {
@@ -3385,11 +3565,21 @@ export class GameEngine {
   private captureEnemyInAura(enemy: Enemy): boolean {
     this.markedEnemyIds.delete(enemy.id);
     if (!this.isBeastmaster() || !this.canTame(enemy)) return false;
-    if (this.pets.length >= this.petMaxSlots) return false;
 
     const dx = enemy.x - this.player.x;
     const dy = enemy.y - this.player.y;
     if (dx * dx + dy * dy > this.domaAuraRadius * this.domaAuraRadius) return false;
+
+    // Chamado dos Ancestrais: with every slot taken, kills inside the aura are
+    // converted into pack healing plus fury instead of being wasted.
+    if (this.petAncestralTimer > 0 && this.pets.length >= this.petMaxSlots) {
+      for (let i = 0; i < this.pets.length; i++) this.pets[i].hp = this.pets[i].maxHp;
+      this.addPetFury(8);
+      this.vfx.addSparks(enemy.x, enemy.y, '#34d399', 8);
+      return false;
+    }
+
+    if (this.pets.length >= this.petMaxSlots) return false;
 
     const pet = new Pet(
       enemy.x,
@@ -3407,6 +3597,10 @@ export class GameEngine {
     // Tamed elites keep some of their bulk so they read as a bigger prize.
     if (enemy.isElite) pet.radius = 17;
     this.pets.push(pet);
+    // Taming is the Domador's own progression track: each new species counts
+    // once toward the slot unlocks, and every capture charges the fury bar.
+    this.tamedSpeciesThisRun.add(enemy.type);
+    this.addPetFury(8);
     this.vfx.addDeathBurst(enemy.x, enemy.y, '#4ade80', 16);
     this.vfx.addSparks(enemy.x, enemy.y, '#fbbf24', 10);
     this.weaponSystem.spawnRingPulse(enemy.x, enemy.y, 54, '#fbbf24', 0.4);
@@ -3414,7 +3608,7 @@ export class GameEngine {
     return true;
   }
 
-  private onEnemyKilled(enemy: Enemy): void {
+  private onEnemyKilled(enemy: Enemy, source: 'pet' | 'other' = 'other'): void {
     if (this.processedEnemyDeaths.has(enemy)) return;
     this.processedEnemyDeaths.add(enemy);
     // Illusory duplicates dissolve in herbal smoke and grant no loot or kills.
@@ -3425,6 +3619,14 @@ export class GameEngine {
 
     // Aura de Doma: unlocked fauna killed inside the aura is tamed on the spot.
     if (this.captureEnemyInAura(enemy)) return;
+
+    // Fúria da Matilha: the pack's specials are paid with kills. Pack kills
+    // charge faster, elites and bosses are worth far more than common fauna.
+    if (this.isBeastmaster()) {
+      if (enemy.isBoss) this.addPetFury(25);
+      else if (enemy.isElite) this.addPetFury(5);
+      else this.addPetFury(source === 'pet' ? 2 : 1);
+    }
 
     if (this.tribeHunter && canDropHunterFish(this.hunterQuest, enemy, this.worldProps.isMainRiverWater(enemy.x, enemy.y))) {
       this.drops.push(new Drop(Date.now() + Math.random(), 'quest_fish', enemy.x, enemy.y));
@@ -3898,41 +4100,93 @@ export class GameEngine {
       : undefined;
 
     const isDerson = this.player.character.id === 'derson';
-    const specialAbilities = [
-      {
-        key: '1',
-        name: isDerson ? 'Entrega Expressa' : undefined,
-        description: isDerson
-          ? 'Arrancada invulnerável de 2,5s que empurra inimigos e deixa um rastro de café fervente.'
-          : 'Especial exclusivo do Derson.',
-        cooldown: isDerson ? this.specialCooldown : 0,
-        cooldownMax: SPECIAL_1_COOLDOWN,
-        unlocked: isDerson,
-        active: isDerson && this.specialActiveTimer > 0,
-      },
-      {
-        key: '2',
-        name: isDerson ? 'Chuva de Pão de Queijo' : undefined,
-        description: isDerson
-          ? 'Dispara 20 pães de queijo explosivos em 360°, causando dano em área, empurrando e atordoando a horda.'
-          : 'Especial exclusivo do Derson.',
-        cooldown: isDerson ? this.special2Cooldown : 0,
-        cooldownMax: SPECIAL_2_COOLDOWN,
-        unlocked: isDerson,
-        active: false,
-      },
-      {
-        key: '3',
-        name: isDerson ? 'Corte de Giro' : undefined,
-        description: isDerson
-          ? 'Acelera a moto ao limite e gira por 4s, emitindo anéis sonoros a cada 0,5s que causam dano em área e afastam inimigos.'
-          : 'Especial exclusivo do Derson.',
-        cooldown: isDerson ? this.special3Cooldown : 0,
-        cooldownMax: SPECIAL_3_COOLDOWN,
-        unlocked: isDerson,
-        active: isDerson && this.player.spinCutTimer > 0,
-      },
-    ];
+    const isDomador = this.isBeastmaster();
+
+    // Domador de Feras slots are paid with the shared pack fury bar, so the
+    // bar is rendered as a resource and each slot shows how much fury is missing.
+    const beastSpecial = (slot: number, icon: string, name: string, description: string) => {
+      const cost = this.petSpecialCost(slot);
+      const unlocked = this.petSpecialUnlocked(slot);
+      const species = this.tamedSpeciesThisRun.size;
+      const target = this.petSpecialSpeciesTarget(slot);
+      return {
+        key: String(slot),
+        name,
+        description,
+        icon,
+        resource: 'fury' as const,
+        cost,
+        cooldown: Math.max(0, cost - Math.floor(this.petFury)),
+        cooldownMax: cost,
+        unlocked,
+        active:
+          slot === 1
+            ? this.petHowlTimer > 0
+            : slot === 2
+              ? this.petWallTimer > 0
+              : this.petAncestralTimer > 0,
+        unlockHint: unlocked
+          ? undefined
+          : `Domar ${target} espécies · ${Math.min(species, target)}/${target} ou nível ${slot === 3 ? 30 : 15}`,
+      };
+    };
+
+    const specialAbilities = isDomador
+      ? [
+          beastSpecial(
+            1,
+            '🐺',
+            'Uivo Ancestral',
+            'A matilha uiva por 6s: +40% velocidade de ataque, +25% dano e cada golpe aplica Presa por 5s.'
+          ),
+          beastSpecial(
+            2,
+            '🛡️',
+            'Muralha de Presas',
+            'As feras formam um anel e provocam a fauna num raio de 320 por 3s. Por 5s, pets recebem -30% de dano e o herói -20%.'
+          ),
+          beastSpecial(
+            3,
+            '🌿',
+            'Chamado dos Ancestrais',
+            'Por 10s a Aura de Doma triplica e todo abate dentro dela doma automaticamente. Pets curam 100% e ganham +50% dano.'
+          ),
+        ]
+      : [
+          {
+            key: '1',
+            name: isDerson ? 'Entrega Expressa' : undefined,
+            description: isDerson
+              ? 'Arrancada invulnerável de 2,5s que empurra inimigos e deixa um rastro de café fervente.'
+              : 'Especial exclusivo do Derson.',
+            cooldown: isDerson ? this.specialCooldown : 0,
+            cooldownMax: SPECIAL_1_COOLDOWN,
+            unlocked: isDerson,
+            active: isDerson && this.specialActiveTimer > 0,
+          },
+          {
+            key: '2',
+            name: isDerson ? 'Chuva de Pão de Queijo' : undefined,
+            description: isDerson
+              ? 'Dispara 20 pães de queijo explosivos em 360°, causando dano em área, empurrando e atordoando a horda.'
+              : 'Especial exclusivo do Derson.',
+            cooldown: isDerson ? this.special2Cooldown : 0,
+            cooldownMax: SPECIAL_2_COOLDOWN,
+            unlocked: isDerson,
+            active: false,
+          },
+          {
+            key: '3',
+            name: isDerson ? 'Corte de Giro' : undefined,
+            description: isDerson
+              ? 'Acelera a moto ao limite e gira por 4s, emitindo anéis sonoros a cada 0,5s que causam dano em área e afastam inimigos.'
+              : 'Especial exclusivo do Derson.',
+            cooldown: isDerson ? this.special3Cooldown : 0,
+            cooldownMax: SPECIAL_3_COOLDOWN,
+            unlocked: isDerson,
+            active: isDerson && this.player.spinCutTimer > 0,
+          },
+        ];
 
     this.callbacks.onHUDUpdate({
       hunterQuest: this.tribeHunter ? { ...this.hunterQuest } : undefined,
@@ -3972,6 +4226,13 @@ export class GameEngine {
       companions: [...this.companions.ids],
       companionShield: Math.ceil(this.player.companionShield),
       specialAbilities,
+      specialEnergy: isDomador
+        ? {
+            value: Math.round(this.petFury),
+            max: this.petFuryMax,
+            label: 'Fúria da Matilha',
+          }
+        : undefined,
     });
   }
 

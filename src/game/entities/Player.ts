@@ -144,6 +144,9 @@ export class Player {
   public facingX: number = 1;
   public facingY: number = 0;
   public invulnerableTimer: number = 0;
+  /** Domador de Feras "Muralha de Presas": temporary flat damage reduction. */
+  public damageReductionTimer: number = 0;
+  public damageReductionBonus: number = 0;
   public walkAnimTimer: number = 0;
   private idleAnimTimer: number = 0;
   private exhaustTimer: number = 0;
@@ -328,6 +331,14 @@ export class Player {
 
     if (this.speedBoostTimer > 0) {
       this.speedBoostTimer -= dt;
+    }
+
+    if (this.damageReductionTimer > 0) {
+      this.damageReductionTimer -= dt;
+      if (this.damageReductionTimer <= 0) {
+        this.damageReductionTimer = 0;
+        this.damageReductionBonus = 0;
+      }
     }
 
     if (this.slowTimer > 0) {
@@ -607,7 +618,13 @@ export class Player {
 
     // Pupunha shield: halve incoming damage while the buff lasts.
     const shieldedAmount = this.shieldTimer > 0 ? amount * 0.5 : amount;
-    const reducedAmount = Math.max(1, Math.max(1, Math.round(shieldedAmount - this.armor)) * (1 - Math.min(0.9, Math.max(0, this.character.statBonuses.damageReduction ?? 0))));
+    let reducedAmount = Math.max(1, Math.max(1, Math.round(shieldedAmount - this.armor)) * (1 - Math.min(0.9, Math.max(0, this.character.statBonuses.damageReduction ?? 0))));
+    if (this.damageReductionTimer > 0) {
+      reducedAmount = Math.max(
+        1,
+        Math.round(reducedAmount * (1 - Math.min(0.5, Math.max(0, this.damageReductionBonus))))
+      );
+    }
     const absorbed = Math.min(this.companionShield, reducedAmount);
     this.companionShield -= absorbed;
     this.hp -= reducedAmount - absorbed;

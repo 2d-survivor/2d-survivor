@@ -88,6 +88,10 @@ export const HUD: React.FC<HUDProps> = ({
     { key: '2', cooldown: 0, cooldownMax: 0, unlocked: false },
     { key: '3', cooldown: 0, cooldownMax: 0, unlocked: false },
   ];
+  const specialEnergy = hud.specialEnergy;
+  const specialEnergyPct = specialEnergy
+    ? Math.max(0, Math.min(100, (specialEnergy.value / Math.max(1, specialEnergy.max)) * 100))
+    : 0;
   const petStance = hud.petStance ?? 'aggressive';
   const isAggressiveStance = petStance === 'aggressive';
   const tameSpecies = hud.tameSpecies;
@@ -391,18 +395,39 @@ export const HUD: React.FC<HUDProps> = ({
         )}
         {/* Special abilities: vertical stack beside the minimap (left edge). */}
         <div className="pointer-events-auto absolute bottom-[5.5rem] left-[20.5rem] z-10 flex flex-col gap-2 max-sm:bottom-[4.5rem] max-sm:left-[15.5rem]">
+          {specialEnergy && (
+            <div
+              title={`${specialEnergy.label}: ${specialEnergy.value}/${specialEnergy.max}`}
+              className="flex h-14 w-16 flex-col items-center justify-center gap-0.5 rounded-lg border-2 border-amber-600/70 bg-slate-950/85 px-1 py-1 shadow-lg backdrop-blur-sm"
+            >
+              <span className="text-[7px] font-black uppercase tracking-wide text-amber-300">
+                Fúria
+              </span>
+              <span className="text-[11px] font-black leading-none text-amber-100">
+                {specialEnergy.value}
+                <span className="text-[7px] font-bold text-slate-400">/{specialEnergy.max}</span>
+              </span>
+              <span className="mt-0.5 h-1.5 w-full overflow-hidden rounded bg-slate-800">
+                <span
+                  className="block h-full rounded bg-gradient-to-r from-amber-500 to-emerald-400 transition-[width] duration-150 motion-reduce:transition-none"
+                  style={{ width: `${specialEnergyPct}%` }}
+                />
+              </span>
+            </div>
+          )}
           {specialSlots.map((slot, index) => {
             const cooldownMax = Math.max(1, slot.cooldownMax);
             const cooldown = Math.max(0, slot.cooldown);
             const ready = slot.unlocked && cooldown <= 0;
             const progress = slot.unlocked ? Math.max(0, Math.min(1, 1 - cooldown / cooldownMax)) : 0;
+            const isFury = slot.resource === 'fury';
 
             return (
               <div
                 key={slot.key || index + 1}
                 title={slot.unlocked
                   ? `${slot.name ?? 'Especial'}${slot.description ? ` — ${slot.description}` : ''}`
-                  : 'Slot bloqueado'}
+                  : slot.unlockHint ?? 'Slot bloqueado'}
                 className={`relative flex h-14 w-16 flex-col items-center justify-center rounded-lg border-2 bg-slate-950/85 shadow-lg backdrop-blur-sm ${slot.unlocked
                   ? slot.active
                     ? 'border-emerald-400 shadow-emerald-500/40'
@@ -418,17 +443,22 @@ export const HUD: React.FC<HUDProps> = ({
                 {slot.unlocked ? (
                   <>
                     <span className="text-lg leading-none">
-                      {slot.key === '1'
-                        ? slot.active ? '💨' : '☕'
-                        : slot.key === '2'
-                          ? '🧀'
-                          : slot.active ? '🌀' : '🏍️'}
+                      {slot.icon ??
+                        (slot.key === '1'
+                          ? slot.active ? '💨' : '☕'
+                          : slot.key === '2'
+                            ? '🧀'
+                            : slot.active ? '🌀' : '🏍️')}
                     </span>
                     <span className="mt-0.5 max-w-[60px] truncate px-1 text-[8px] font-bold uppercase tracking-wide text-amber-200">
                       {slot.name ?? 'Especial'}
                     </span>
                     <span className={`text-[9px] font-black ${ready ? 'text-emerald-300' : 'text-slate-300'}`}>
-                      {ready ? 'PRONTO' : `${Math.ceil(cooldown)}s`}
+                      {ready
+                        ? 'PRONTO'
+                        : isFury
+                          ? <span className="text-[8px]">faltam {Math.ceil(cooldown)}</span>
+                          : `${Math.ceil(cooldown)}s`}
                     </span>
                     <span className="absolute inset-x-1 bottom-0.5 h-0.5 overflow-hidden rounded bg-slate-800">
                       <span
@@ -440,8 +470,8 @@ export const HUD: React.FC<HUDProps> = ({
                 ) : (
                   <>
                     <span className="text-base leading-none">🔒</span>
-                    <span className="text-[8px] font-bold uppercase tracking-wide text-slate-500">
-                      Bloqueado
+                    <span className="max-w-[58px] px-0.5 text-center text-[7px] font-bold leading-[1.15] text-slate-400">
+                      {slot.unlockHint ?? 'Bloqueado'}
                     </span>
                   </>
                 )}
