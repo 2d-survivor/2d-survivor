@@ -468,6 +468,10 @@ export class GameEngine {
   private petOrbitAngle = 0;
   private readonly petOrbitSpeed = 0.6;
   private readonly petGuardRadius = 320;
+  /** Guard pets lunge at prey this close to their orbit slot... */
+  private readonly petGuardLungeRange = 150;
+  /** ...but never stray farther than this from the Domador. */
+  private readonly petGuardLeash = 170;
   private readonly petUpgradeLevels: Record<PetUpgradeId, number> = {
     chamado_matilha: 0,
     furia_selvagem: 0,
@@ -2804,22 +2808,42 @@ export class GameEngine {
       const target = this.selectPetTarget(pet, claimedTargets, aggressive);
 
       if (!aggressive) {
-        // Guarda: a fera orbita o Domador e nunca abandona o anel, atacando só
-        // o que entra no alcance a partir da própria órbita.
+        // Guarda: a fera orbita o Domador. A distância atira do próprio anel,
+        // mas as de corpo a corpo dão um bote curto: sem isso o alcance de
+        // mordida ficava menor que o raio da órbita e as feras maiores
+        // (elites com raio 17) giravam sem nunca encostar em ninguém.
         const slot = this.petOrbitSlot(i, petCount);
-        pet.update(dt, slot.x, slot.y);
-        if (this.damagePetOnContact(pet)) continue;
-        if (!target || pet.attackTimer > 0) continue;
+        if (!target) {
+          pet.update(dt, slot.x, slot.y);
+          if (this.damagePetOnContact(pet)) continue;
+          continue;
+        }
 
         const reach = Math.hypot(target.x - pet.x, target.y - pet.y);
-        const biteDist = pet.radius + target.radius + 10;
-        if (pet.isElite && reach <= biteDist) {
-          pet.attackTimer = this.petAttackCooldown(pet);
-          this.petMeleeAttack(pet, target);
-        } else if ((pet.attackStyle === 'ranged' || pet.isElite) && reach <= 340) {
-          pet.attackTimer = this.petAttackCooldown(pet);
-          this.firePetProjectile(pet, target);
-        } else if (!pet.isElite && reach <= biteDist) {
+        if (pet.attackStyle === 'ranged') {
+          pet.update(dt, slot.x, slot.y);
+          if (this.damagePetOnContact(pet)) continue;
+          if (pet.attackTimer <= 0 && reach <= 340) {
+            pet.attackTimer = this.petAttackCooldown(pet);
+            this.firePetProjectile(pet, target);
+          }
+          continue;
+        }
+
+        if (reach > this.petGuardLungeRange) {
+          // Presa longe demais: mantém a órbita e espera ela se aproximar.
+          pet.update(dt, slot.x, slot.y);
+          if (this.damagePetOnContact(pet)) continue;
+          continue;
+        }
+
+        pet.update(dt, target.x, target.y);
+        this.clampPetToGuardLeash(pet);
+        if (this.damagePetOnContact(pet)) continue;
+        if (pet.attackTimer > 0) continue;
+
+        const guardBiteDist = pet.radius + target.radius + 10;
+        if (Math.hypot(target.x - pet.x, target.y - pet.y) <= guardBiteDist) {
           pet.attackTimer = this.petAttackCooldown(pet);
           this.petMeleeAttack(pet, target);
         }
@@ -2845,10 +2869,7 @@ export class GameEngine {
       if (pet.attackTimer > 0) continue;
 
       const biteDist = pet.radius + target.radius + 10;
-      if (pet.isElite && targetDist <= biteDist) {
-        pet.attackTimer = this.petAttackCooldown(pet);
-        this.petMeleeAttack(pet, target);
-      } else if ((pet.attackStyle === 'ranged' || pet.isElite) && targetDist <= 340) {
+      if (pet.attackStyle === 'ranged' && targetDist <= 340) {
         pet.attackTimer = this.petAttackCooldown(pet);
         this.firePetProjectile(pet, target);
       } else if (pet.attackStyle !== 'ranged' && targetDist <= biteDist) {
@@ -2935,6 +2956,17 @@ export class GameEngine {
       x: this.player.x + Math.cos(angle) * ringRadius,
       y: this.player.y + Math.sin(angle) * ringRadius,
     };
+  }
+
+  /** Keeps a lunging guard pet inside its leash; it never chases far away. */
+  private clampPetToGuardLeash(pet: Pet): void {
+    const dx = pet.x - this.player.x;
+    const dy = pet.y - this.player.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist <= this.petGuardLeash || dist <= 0.001) return;
+    const scale = this.petGuardLeash / dist;
+    pet.x = this.player.x + dx * scale;
+    pet.y = this.player.y + dy * scale;
   }
 
   /** R key or the HUD button swaps the pack between aggressive and guard. */

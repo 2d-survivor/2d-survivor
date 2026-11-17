@@ -184,7 +184,10 @@ export class Pet {
     if (dist <= 1) return;
 
     if (dx !== 0) this.facingX = dx > 0 ? 1 : -1;
-    if (dist > this.radius + 18) {
+    // Stop just inside biting range. This used to be radius + 18, which is
+    // farther than the bite reach for small prey, so big pets (elites with
+    // radius 17) parked out of range and never attacked.
+    if (dist > this.radius + 8) {
       const chargeBoost = this.attackStyle === 'charge' && dist > 120 ? 1.6 : 1;
       const step = Math.min(dist, this.speed * chargeBoost * dt);
       this.x += (dx / dist) * step;
