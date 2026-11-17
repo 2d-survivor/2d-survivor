@@ -90,7 +90,7 @@ export const HUD: React.FC<HUDProps> = ({
   const domaExpanded = hasTameBar && domaOpen;
   const unlockedSpeciesCount = tameSpecies ? tameSpecies.filter((species) => species.unlocked).length : 0;
   const petSlots = hud.petSlots ?? hud.pets?.length ?? 0;
-  const petBarOffset = domaExpanded ? 'bottom-[16.5rem]' : 'bottom-[6.5rem]';
+  const petBarOffset = domaExpanded ? 'bottom-[10.5rem]' : 'bottom-4';
   const questPanelOffset = domaExpanded ? 'bottom-[22rem]' : 'bottom-[11.5rem]';
   const nativeWeapon = hud.nativeWeapon;
   const attackCount = Math.min(4, hud.weapons.length + (nativeWeapon ? 1 : 0));
@@ -383,7 +383,8 @@ export const HUD: React.FC<HUDProps> = ({
             </span>
           </button>
         )}
-        <div className="flex justify-center gap-2">
+        {/* Special abilities: vertical stack beside the minimap (left edge). */}
+        <div className="pointer-events-auto absolute bottom-[5.5rem] left-[20.5rem] z-10 flex flex-col gap-2 max-sm:bottom-[4.5rem] max-sm:left-[15.5rem]">
           {specialSlots.map((slot, index) => {
             const cooldownMax = Math.max(1, slot.cooldownMax);
             const cooldown = Math.max(0, slot.cooldown);
@@ -446,7 +447,7 @@ export const HUD: React.FC<HUDProps> = ({
         {/* Pet bar: Domador de Feras companions (Alt + Right Click releases) */}
         {hud.pets && hud.pets.length > 0 && (
           <div
-            className={`absolute left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-1 ${petBarOffset}`}
+            className={`absolute right-[12.5rem] z-10 flex flex-col items-end gap-1 max-sm:right-2 max-sm:bottom-16 ${petBarOffset}`}
           >
             <div className="pointer-events-auto flex items-end gap-2 rounded-xl border border-amber-700/60 bg-slate-950/85 px-2.5 py-2 shadow-2xl backdrop-blur-md">
               {hud.pets.map((pet, index) => {
