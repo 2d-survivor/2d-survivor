@@ -8,7 +8,7 @@ import type { NativeWeaponConfig } from '../types';
 export const ZARABATANA: NativeWeaponConfig = {
   name: 'Zarabatana Tranquilizante',
   description:
-    'Dispara dardos rápidos no inimigo mais próximo, aplicando lentidão. Dardos que atingem fauna marcada pela Aura de Doma capturam a criatura em vez de matá-la.',
+    'Dispara dardos rápidos no inimigo mais próximo, aplicando lentidão. A fauna abatida dentro da Aura de Doma é domada em vez de morrer.',
   iconName: 'Crosshair',
 };
 

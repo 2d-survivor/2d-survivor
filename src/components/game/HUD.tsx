@@ -332,7 +332,7 @@ export const HUD: React.FC<HUDProps> = ({
             </div>
             {unlockedSpeciesCount === 0 && (
               <p role="status" className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-center text-[9px] font-bold text-amber-200">
-                Nenhuma espécie liberada — a Aura de Doma não captura nada até você escolher.
+                Nenhuma espécie liberada — a Aura de Doma não doma nada até você escolher.
               </p>
             )}
             <div className="flex flex-wrap gap-1">
@@ -344,7 +344,7 @@ export const HUD: React.FC<HUDProps> = ({
                   aria-pressed={species.unlocked}
                   aria-label={`${species.name}: ${species.unlocked ? 'liberada' : 'bloqueada'} para doma. Clique para ${species.unlocked ? 'bloquear' : 'liberar'}.`}
                   title={`${species.name} — ${species.unlocked
-                    ? 'liberada: a Aura de Doma marca e a zarabatana captura.'
+                    ? 'liberada: a Aura de Doma doma a espécie quando ela morre dentro do alcance.'
                     : 'bloqueada: a aura ignora esta espécie.'}\nClique para ${species.unlocked ? 'bloquear' : 'liberar'}.`}
                   className={`relative flex h-14 w-14 shrink-0 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg border bg-gradient-to-b from-slate-900 to-slate-950 px-1 py-1 transition active:scale-95 ${species.unlocked
                     ? 'border-emerald-400/80 text-emerald-200 hover:border-emerald-300'

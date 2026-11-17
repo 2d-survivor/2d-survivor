@@ -12,8 +12,6 @@ export interface PetUpgradeDefinition {
 const MATILHA_MAX_PETS = 5;
 const BASE_MAX_PETS = 2;
 const MATILHA_PETS_PER_LEVEL = 1;
-const BASE_TAME_THRESHOLD = 40;
-const TAME_THRESHOLD_PER_LEVEL = 4;
 const BASE_AURA_RADIUS = 280;
 const AURA_RADIUS_PER_LEVEL = 30;
 
@@ -70,9 +68,7 @@ export const PET_UPGRADE_REGISTRY: Record<PetUpgradeId, PetUpgradeDefinition> = 
     maxLevel: 5,
     levelDescriptions: [1, 2, 3, 4, 5].map(
       (level) =>
-        `Doma criaturas com até ${
-          BASE_TAME_THRESHOLD + level * TAME_THRESHOLD_PER_LEVEL
-        }% de HP e amplia o alcance da aura para ${
+        `Amplia o alcance da Aura de Doma para ${
           BASE_AURA_RADIUS + level * AURA_RADIUS_PER_LEVEL
         }.`
     ),

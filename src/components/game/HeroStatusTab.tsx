@@ -29,7 +29,7 @@ const formatSeconds = (value: number): string => `${formatNumber(value, 2)} s`;
 
 function describeCharacterPassive(character: CharacterConfig): string {
   if (character.id === 'domador_feras') {
-    return 'Aura de Doma: marca fauna comum abaixo do limite de captura (40% base, até 60% com Doma Rápida) e converte a criatura marcada em um pet aliado.';
+    return 'Aura de Doma: doma automaticamente a fauna liberada que morre dentro do alcance da aura, desde que haja espaço na matilha.';
   }
   const bonuses = character.statBonuses;
   const parts: string[] = [];

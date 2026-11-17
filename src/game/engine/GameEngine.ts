@@ -458,9 +458,8 @@ export class GameEngine {
   private petCritCounter = 0;
   private petStance: 'aggressive' | 'guard' = 'aggressive';
   /**
-   * Species the Aura de Doma may tame. Starts with every common creature
-   * unlocked (bosses and elites are never in the catalog); the HUD bar lets
-   * the player block or re-enable each one.
+   * Species the Aura de Doma may tame. Starts with every catalogued creature
+   * unlocked; the HUD bar lets the player block or re-enable each one.
    */
   private unlockedTameSpecies = new Set<EnemyType>(
     TAMEABLE_SPECIES.map((species) => species.type)
@@ -2580,12 +2579,7 @@ export class GameEngine {
     return this.petUpgradeLevels.elo_vital * 0.01;
   }
 
-  /** Doma Rápida raises the HP ceiling from 40% to 60%. */
-  private get domaTameThreshold(): number {
-    return 0.4 + this.petUpgradeLevels.doma_rapida * 0.04;
-  }
-
-  /** Doma Rápida also widens the aura from 280 to 430 units. */
+  /** Doma Rápida widens the aura from 280 to 430 units. */
   private get domaAuraRadius(): number {
     return 280 + this.petUpgradeLevels.doma_rapida * 30;
   }
@@ -2660,9 +2654,9 @@ export class GameEngine {
   }
 
   /**
-   * Aura de Doma: a periodic spiritual pulse marks common fauna below the
-   * current HP threshold (40% base, up to 60% with Doma Rápida). A marked
-   * enemy that reaches 0 HP becomes a full-health ally pet.
+   * Aura de Doma: a periodic spiritual pulse marks every unlocked creature
+   * inside its radius. Any unlocked creature that dies inside the aura becomes
+   * a full-health ally pet, regardless of how much HP it had when it died.
    */
   private updateBeastmasterAura(dt: number): void {
     if (!this.isBeastmaster()) return;
@@ -2686,17 +2680,11 @@ export class GameEngine {
       0.36
     );
 
-    const aliveIds = new Set<number>();
-    for (let i = 0; i < this.enemies.length; i++) aliveIds.add(this.enemies[i].id);
-    for (const id of this.markedEnemyIds) {
-      if (!aliveIds.has(id)) this.markedEnemyIds.delete(id);
-    }
-
+    this.markedEnemyIds.clear();
     const radiusSq = this.domaAuraRadius * this.domaAuraRadius;
     for (let i = 0; i < this.enemies.length; i++) {
       const enemy = this.enemies[i];
       if (enemy.hp <= 0 || enemy.isSubmerged || !this.canTame(enemy)) continue;
-      if (enemy.hp >= enemy.maxHp * this.domaTameThreshold) continue;
       const dx = enemy.x - this.player.x;
       const dy = enemy.y - this.player.y;
       if (dx * dx + dy * dy > radiusSq) continue;
@@ -2777,14 +2765,6 @@ export class GameEngine {
         const dy = enemy.y - dart.y;
         const reach = ZARABATANA_STATS.projectileRadius + enemy.radius;
         if (dx * dx + dy * dy > reach * reach) continue;
-
-        // Capture protection: a marked creature with a free slot is tamed, never killed.
-        if (this.captureMarkedEnemy(enemy)) {
-          const index = this.enemies.indexOf(enemy);
-          if (index >= 0) this.enemies.splice(index, 1);
-          hit = true;
-          break;
-        }
 
         const dist = Math.hypot(dx, dy) || 1;
         const dead = enemy.takeDamage(dart.damage, dx / dist, dy / dist, 60);
@@ -3126,17 +3106,19 @@ export class GameEngine {
   }
 
   /**
-   * Aura de Doma capture. Returns true when the creature became a pet, so no
-   * kill rewards or death effects are processed.
+   * Aura de Doma capture: any unlocked fauna that dies inside the aura joins
+   * the pack while there is a free slot. Returns true when the creature became
+   * a pet, so no kill rewards or death effects are processed.
    */
-  private captureMarkedEnemy(enemy: Enemy): boolean {
-    if (!this.isBeastmaster() || !this.markedEnemyIds.has(enemy.id)) return false;
-    if (!this.canTame(enemy) || this.pets.length >= this.petMaxSlots) {
-      this.markedEnemyIds.delete(enemy.id);
-      return false;
-    }
-
+  private captureEnemyInAura(enemy: Enemy): boolean {
     this.markedEnemyIds.delete(enemy.id);
+    if (!this.isBeastmaster() || !this.canTame(enemy)) return false;
+    if (this.pets.length >= this.petMaxSlots) return false;
+
+    const dx = enemy.x - this.player.x;
+    const dy = enemy.y - this.player.y;
+    if (dx * dx + dy * dy > this.domaAuraRadius * this.domaAuraRadius) return false;
+
     const pet = new Pet(
       enemy.x,
       enemy.y,
@@ -3167,8 +3149,8 @@ export class GameEngine {
       return;
     }
 
-    // Aura de Doma: a marked creature is tamed instead of staying dead.
-    if (this.captureMarkedEnemy(enemy)) return;
+    // Aura de Doma: unlocked fauna killed inside the aura is tamed on the spot.
+    if (this.captureEnemyInAura(enemy)) return;
 
     if (this.tribeHunter && canDropHunterFish(this.hunterQuest, enemy, this.worldProps.isMainRiverWater(enemy.x, enemy.y))) {
       this.drops.push(new Drop(Date.now() + Math.random(), 'quest_fish', enemy.x, enemy.y));

@@ -3,8 +3,8 @@ import { EnemyType } from '../types';
 /**
  * Every creature the Domador de Feras can tame: the common forest fauna and
  * the rare forest elites. Bosses and illusory clones are never listed here.
- * The player unlocks species in the HUD's doma bar; only unlocked species can
- * be marked by the Aura de Doma and captured by the Zarabatana Tranquilizante.
+ * The player unlocks species in the HUD's doma bar; only unlocked species are
+ * tamed by the Aura de Doma when they die inside its radius.
  */
 export interface TameableSpecies {
   type: EnemyType;

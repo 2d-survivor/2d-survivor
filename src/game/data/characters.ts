@@ -105,7 +105,7 @@ export const CHARACTERS: CharacterConfig[] = [
     name: 'Domador de Feras',
     title: 'Beastmaster',
     description:
-      'Andarilho que enxerga aliados na fauna da floresta. Sua Zarabatana Tranquilizante enfraquece e captura animais, e a Aura de Doma converte criaturas marcadas em feras leais.',
+      'Andarilho que enxerga aliados na fauna da floresta. Sua Zarabatana Tranquilizante enfraquece os animais, e a Aura de Doma doma a fauna liberada que morre dentro do seu alcance.',
     nativeWeapon: ZARABATANA,
     iconName: 'PawPrint',
     color: '#3f6212',
