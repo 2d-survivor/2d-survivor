@@ -154,14 +154,14 @@ interface WaterRipple {
   angle: number;
 }
 
-// Amazon food-chain tuning. Animals only leave the player alone outside this
-// radius; predators hunt on the requested 10-12s / 15s cycles.
+// Amazon food-chain tuning. Predators hunt on a fixed 6 s cycle and only
+// leave the player alone while they are actually chasing a meal.
 const ECOLOGY_PLAYER_SAFE_RADIUS = 420;
-const ECOLOGY_GRAZING_ARRIVAL = 52;
 const ECOLOGY_FRUIT_EAT_RADIUS = 54;
-const ECOLOGY_RIVER_PREDATOR_RANGE = 320;
-const ECOLOGY_JAGUAR_RANGE = 360;
 const ECOLOGY_FRUIT_FEED_COOLDOWN = 8;
+const ECOLOGY_PREDATOR_SENSE_RADIUS = 700;
+const ECOLOGY_PREDATOR_COOLDOWN = 6;
+const ECOLOGY_PREDATOR_EAT_PADDING = 18;
 
 // The Sucuri ignores the usual water/mud penalties and is faster on wet ground.
 const SUCURI_WATER_SPEED_MULTIPLIER = 1.5;
@@ -268,7 +268,9 @@ const BEAST_WALL_RING_RADIUS = 150;
 const BEAST_WALL_TAUNT_RADIUS = 320;
 const BEAST_WALL_PUSH_FORCE = 180;
 const BEAST_WALL_HERO_REDUCTION = 0.2;
-const BEAST_ANCESTRAL_DURATION = 10;
+// Estouro da Matilha: every active pet splits into two feral clones for 6s.
+const BEAST_CLONES_PER_PET = 2;
+const BEAST_CLONE_SPAWN_RADIUS = 34;
 
 export class GameEngine {
   private canvas: HTMLCanvasElement;
@@ -493,7 +495,8 @@ export class GameEngine {
   private readonly petFuryMax = 100;
   private petHowlTimer = 0;
   private petWallTimer = 0;
-  private petAncestralTimer = 0;
+  /** Estouro da Matilha clones: temporary pets outside the pack bar. */
+  private petClones: Pet[] = [];
   /** Species tamed at least once in this run (the special unlock track). */
   private tamedSpeciesThisRun = new Set<EnemyType>();
   /**
@@ -880,20 +883,38 @@ export class GameEngine {
       return;
     }
 
-    // Chamado dos Ancestrais: triple aura, pack fully healed and enraged.
+    // Estouro da Matilha: every active pet splits into two feral clones that
+    // hunt the whole screen for six seconds. Without a pack there is nothing
+    // to multiply, so the fury is not spent.
+    if (this.pets.length === 0) return;
+
     this.petFury -= cost;
-    this.petAncestralTimer = Math.max(this.petAncestralTimer, BEAST_ANCESTRAL_DURATION);
-    for (let i = 0; i < this.pets.length; i++) this.pets[i].hp = this.pets[i].maxHp;
+    this.petClones.length = 0;
+    for (let i = 0; i < this.pets.length; i++) {
+      const pet = this.pets[i];
+      for (let c = 0; c < BEAST_CLONES_PER_PET; c++) {
+        const angle =
+          (c * Math.PI * 2) / BEAST_CLONES_PER_PET + Math.random() * 0.7;
+        this.petClones.push(
+          pet.spawnClone(
+            pet.x + Math.cos(angle) * BEAST_CLONE_SPAWN_RADIUS,
+            pet.y + Math.sin(angle) * BEAST_CLONE_SPAWN_RADIUS
+          )
+        );
+      }
+    }
+
     this.weaponSystem.spawnRingPulse(
       this.player.x,
       this.player.y,
       this.domaAuraRadius,
-      '#34d399',
+      '#f87171',
       0.7
     );
-    this.vfx.addSparks(this.player.x, this.player.y, '#34d399', 26);
+    this.weaponSystem.spawnRingPulse(this.player.x, this.player.y, 150, '#fbbf24', 0.5);
+    this.vfx.addSparks(this.player.x, this.player.y, '#f87171', 30);
     this.sound.playLevelUp();
-    this.camera.shake(0.24, 7);
+    this.camera.shake(0.22, 6);
     this.syncHUD();
   }
 
@@ -1965,6 +1986,7 @@ export class GameEngine {
     this.updateBeastmasterAura(dt);
     this.updateZarabatana(dt);
     this.updatePets(dt);
+    this.updatePetClones(dt);
 
     // 6.2. Resolve fruit foraging and predator feeds.
     this.resolveAmazonEcology();
@@ -2302,14 +2324,14 @@ export class GameEngine {
   }
 
   /**
-   * Assigns food-chain walk targets while the hero is far enough away:
-   * herbivores head to the riverbank and the Anta heads to a fruit tree.
+   * Assigns food-chain walk targets. Predators lock onto the closest prey as
+   * soon as their 6 s hunt cooldown is ready; the Anta heads to fruit trees.
+   * Herbivores no longer wander to the riverbank, so they never stop fighting.
    */
   private prepareAmazonEcology(dt: number): void {
     if (!this.waveDirector.isAmazonForest) return;
 
     const safeRadiusSq = ECOLOGY_PLAYER_SAFE_RADIUS * ECOLOGY_PLAYER_SAFE_RADIUS;
-    const grazingArrivalSq = ECOLOGY_GRAZING_ARRIVAL * ECOLOGY_GRAZING_ARRIVAL;
 
     for (let i = 0; i < this.enemies.length; i++) {
       const enemy = this.enemies[i];
@@ -2321,12 +2343,26 @@ export class GameEngine {
 
       if (enemy.isEcologyPredator) {
         if (enemy.ecologyHuntTimer > 0) {
-          enemy.ecologyHuntTimer -= dt;
+          enemy.ecologyHuntTimer = Math.max(0, enemy.ecologyHuntTimer - dt);
+          enemy.ecologyTargetX = null;
+          enemy.ecologyTargetY = null;
+          continue;
+        }
+
+        // Hunt ready: chasing a meal outranks the fight with the hero. The
+        // target is refreshed every frame so the predator follows the prey.
+        const prey = this.findPredatorPrey(enemy);
+        if (prey) {
+          enemy.ecologyTargetX = prey.x;
+          enemy.ecologyTargetY = prey.y;
+        } else {
+          enemy.ecologyTargetX = null;
+          enemy.ecologyTargetY = null;
         }
         continue;
       }
 
-      if (!enemy.isGrazingHerbivore && !enemy.isFruitForager) continue;
+      if (!enemy.isFruitForager) continue;
 
       const playerDx = this.player.x - enemy.x;
       const playerDy = this.player.y - enemy.y;
@@ -2338,46 +2374,23 @@ export class GameEngine {
         continue;
       }
 
-      if (enemy.isFruitForager) {
-        if (enemy.ecologyTargetTreeId !== null) {
-          const tree = this.worldProps.fruitTrees.find(
-            (candidate) => candidate.id === enemy.ecologyTargetTreeId
-          );
-          if (!tree || !tree.active) {
-            enemy.ecologyTargetX = null;
-            enemy.ecologyTargetY = null;
-            enemy.ecologyTargetTreeId = null;
-          }
-        }
-
-        if (enemy.ecologyTargetX === null && enemy.ecologyActionCooldown <= 0) {
-          const tree = this.worldProps.getNearestActiveFruitTree(enemy.x, enemy.y);
-          if (tree) {
-            enemy.ecologyTargetTreeId = tree.id;
-            enemy.ecologyTargetX = tree.x;
-            enemy.ecologyTargetY = tree.y;
-          }
-        }
-        continue;
-      }
-
-      if (enemy.ecologyTargetX === null) {
-        const beach = this.worldProps.getBeachGrazingTarget(enemy.x, enemy.y);
-        if (beach) {
-          enemy.ecologyTargetX = beach.x;
-          enemy.ecologyTargetY = beach.y;
+      if (enemy.ecologyTargetTreeId !== null) {
+        const tree = this.worldProps.fruitTrees.find(
+          (candidate) => candidate.id === enemy.ecologyTargetTreeId
+        );
+        if (!tree || !tree.active) {
+          enemy.ecologyTargetX = null;
+          enemy.ecologyTargetY = null;
+          enemy.ecologyTargetTreeId = null;
         }
       }
 
-      if (enemy.ecologyTargetX !== null && enemy.ecologyTargetY !== null) {
-        const targetDx = enemy.ecologyTargetX - enemy.x;
-        const targetDy = enemy.ecologyTargetY - enemy.y;
-        if (targetDx * targetDx + targetDy * targetDy <= grazingArrivalSq) {
-          enemy.ecologyGrazingTimer -= dt;
-          if (enemy.ecologyGrazingTimer <= 0) {
-            enemy.ecologyGrazingTimer = 1.4 + Math.random() * 0.9;
-            this.vfx.addSparks(enemy.x, enemy.y, '#84cc16', 3);
-          }
+      if (enemy.ecologyTargetX === null && enemy.ecologyActionCooldown <= 0) {
+        const tree = this.worldProps.getNearestActiveFruitTree(enemy.x, enemy.y);
+        if (tree) {
+          enemy.ecologyTargetTreeId = tree.id;
+          enemy.ecologyTargetX = tree.x;
+          enemy.ecologyTargetY = tree.y;
         }
       }
     }
@@ -2417,57 +2430,32 @@ export class GameEngine {
       this.vfx.addSparks(enemy.x, enemy.y, '#38bdf8', 8);
     }
 
-    // Jacaré-açu, Sucuri and Onça-pintada devour nearby prey on their cycles.
+    // Jacaré-açu, Sucuri and Onça-pintada prioritize prey as soon as their
+    // 6 s hunt cooldown is ready: they chase the closest animal and devour it
+    // on contact, then return to the fight while the cooldown reloads.
     const devoured = new Set<Enemy>();
     for (let i = 0; i < this.enemies.length; i++) {
       const predator = this.enemies[i];
       if (!predator.isEcologyPredator || predator.hp <= 0 || predator.jaguarBusy) continue;
       if (predator.ecologyHuntTimer > 0) continue;
 
-      const isJaguar = predator.isJaguarPredator;
-      const preyTypes = isJaguar
-        ? JAGUAR_PREY
-        : predator.type === 'sucuri'
-          ? SUCURI_PREY
-          : RIVER_PREDATOR_PREY;
-      const range = isJaguar ? ECOLOGY_JAGUAR_RANGE : ECOLOGY_RIVER_PREDATOR_RANGE;
-      const rangeSq = range * range;
+      const prey = this.findPredatorPrey(predator, devoured);
+      if (!prey) continue;
 
-      let prey: Enemy | null = null;
-      let closestDistance = rangeSq;
-      for (let j = 0; j < this.enemies.length; j++) {
-        const candidate = this.enemies[j];
-        if (candidate === predator || candidate.hp <= 0 || devoured.has(candidate)) continue;
-        if (candidate.isSubmerged) continue;
-        if (!preyTypes.includes(candidate.type)) continue;
+      const dx = prey.x - predator.x;
+      const dy = prey.y - predator.y;
+      const eatDistance = predator.radius + prey.radius + ECOLOGY_PREDATOR_EAT_PADDING;
+      if (dx * dx + dy * dy > eatDistance * eatDistance) continue;
 
-        const dx = candidate.x - predator.x;
-        const dy = candidate.y - predator.y;
-        const distance = dx * dx + dy * dy;
-        if (distance <= closestDistance) {
-          closestDistance = distance;
-          prey = candidate;
-        }
-      }
-
-      if (prey) {
-        devoured.add(prey);
-        predator.growFromPrey();
-        // At night predators digest faster and grow twice as fast per meal.
-        if (nightFrenzy) predator.growFromPrey();
-        this.vfx.addDeathBurst(prey.x, prey.y, '#ef4444', 10);
-        this.vfx.addSparks(predator.x, predator.y, '#f97316', 8);
-        const huntDelay =
-          predator.type === 'elite_black_caiman' || predator.type === 'baby_black_caiman'
-            ? 12
-            : isJaguar
-              ? 15
-              : 10 + Math.random() * 2;
-        predator.ecologyHuntTimer = huntDelay * (nightFrenzy ? 0.5 : 1);
-      } else {
-        // Nothing in reach: retry soon instead of waiting a full cycle.
-        predator.ecologyHuntTimer = nightFrenzy ? 1 : 2;
-      }
+      devoured.add(prey);
+      predator.growFromPrey();
+      // At night predators digest faster and grow twice as fast per meal.
+      if (nightFrenzy) predator.growFromPrey();
+      this.vfx.addDeathBurst(prey.x, prey.y, '#ef4444', 10);
+      this.vfx.addSparks(predator.x, predator.y, '#f97316', 8);
+      predator.ecologyHuntTimer = ECOLOGY_PREDATOR_COOLDOWN;
+      predator.ecologyTargetX = null;
+      predator.ecologyTargetY = null;
     }
 
     if (devoured.size > 0) {
@@ -2477,6 +2465,37 @@ export class GameEngine {
         }
       }
     }
+  }
+
+  /** Nearest valid meal for an ecology predator, inside its hunting radius. */
+  private findPredatorPrey(
+    predator: Enemy,
+    excluded?: Set<Enemy>,
+    maxDistance: number = ECOLOGY_PREDATOR_SENSE_RADIUS
+  ): Enemy | null {
+    const preyTypes = predator.isJaguarPredator
+      ? JAGUAR_PREY
+      : predator.type === 'sucuri'
+        ? SUCURI_PREY
+        : RIVER_PREDATOR_PREY;
+
+    let prey: Enemy | null = null;
+    let bestDistance = maxDistance * maxDistance;
+    for (let i = 0; i < this.enemies.length; i++) {
+      const candidate = this.enemies[i];
+      if (candidate === predator || candidate.hp <= 0) continue;
+      if (candidate.isSubmerged || excluded?.has(candidate)) continue;
+      if (!preyTypes.includes(candidate.type)) continue;
+
+      const dx = candidate.x - predator.x;
+      const dy = candidate.y - predator.y;
+      const distance = dx * dx + dy * dy;
+      if (distance <= bestDistance) {
+        bestDistance = distance;
+        prey = candidate;
+      }
+    }
+    return prey;
   }
 
   private forestCounters(): ForestCounters {
@@ -2718,18 +2737,14 @@ export class GameEngine {
     return this.petUpgradeLevels.elo_vital * 0.01;
   }
 
-  /** Doma Rápida widens the aura from 280 to 430 units; the ult triples it. */
+  /** Doma Rápida widens the aura from 280 to 430 units. */
   private get domaAuraRadius(): number {
-    const base = 280 + this.petUpgradeLevels.doma_rapida * 30;
-    return this.petAncestralTimer > 0 ? base * 3 : base;
+    return 280 + this.petUpgradeLevels.doma_rapida * 30;
   }
 
-  /** Uivo Ancestral and Chamado dos Ancestrais stack their pack damage. */
+  /** Uivo Ancestral buffs the pack's bite for its duration. */
   private get petSpecialDamageBonus(): number {
-    let bonus = 1;
-    if (this.petHowlTimer > 0) bonus += 0.25;
-    if (this.petAncestralTimer > 0) bonus += 0.5;
-    return bonus;
+    return this.petHowlTimer > 0 ? 1.25 : 1;
   }
 
   private petSpecialCost(slot: number): number {
@@ -2768,9 +2783,6 @@ export class GameEngine {
   private updatePetSpecialTimers(dt: number): void {
     if (this.petHowlTimer > 0) this.petHowlTimer = Math.max(0, this.petHowlTimer - dt);
     if (this.petWallTimer > 0) this.petWallTimer = Math.max(0, this.petWallTimer - dt);
-    if (this.petAncestralTimer > 0) {
-      this.petAncestralTimer = Math.max(0, this.petAncestralTimer - dt);
-    }
   }
 
   private applyPetBonuses(pet: Pet): void {
@@ -3086,6 +3098,67 @@ export class GameEngine {
   }
 
   /**
+   * Estouro da Matilha clones: off the pack bar, immune to contact damage,
+   * deaf to the guard/aggressive stance and always hunting the closest enemy
+   * anywhere in the world until their six-second timer runs out.
+   */
+  private updatePetClones(dt: number): void {
+    if (this.petClones.length === 0) return;
+
+    for (let i = this.petClones.length - 1; i >= 0; i--) {
+      const clone = this.petClones[i];
+      clone.cloneTimer = Math.max(0, clone.cloneTimer - dt);
+      if (clone.cloneTimer === 0) {
+        this.vfx.addSparks(clone.x, clone.y, '#f87171', 8);
+        this.vfx.addDeathBurst(clone.x, clone.y, '#fbbf24', 10);
+        this.petClones.splice(i, 1);
+        continue;
+      }
+
+      const target = this.nearestEnemyForClone(clone);
+      if (!target) {
+        clone.update(dt, null, null);
+        continue;
+      }
+
+      const ranged = clone.delivery === 'projectile' || clone.delivery === 'pulse';
+      const dist = Math.hypot(target.x - clone.x, target.y - clone.y);
+      if (ranged && dist <= clone.profile.range * 0.75) {
+        clone.update(dt, null, null);
+      } else {
+        clone.update(dt, target.x, target.y);
+      }
+
+      if (clone.attackTimer > 0) continue;
+
+      const reach = ranged ? clone.profile.range : clone.radius + target.radius + 10;
+      const reachDist = Math.hypot(target.x - clone.x, target.y - clone.y);
+      if (reachDist <= reach) {
+        clone.attackTimer = this.petAttackCooldown(clone);
+        this.petAttack(clone, target);
+      }
+    }
+  }
+
+  /** Clones ignore the pack's screen/leash limits and chase the closest prey. */
+  private nearestEnemyForClone(clone: Pet): Enemy | null {
+    let nearest: Enemy | null = null;
+    let bestDistSq = Infinity;
+    for (let i = 0; i < this.enemies.length; i++) {
+      const enemy = this.enemies[i];
+      if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+      const dx = enemy.x - clone.x;
+      const dy = enemy.y - clone.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < bestDistSq) {
+        bestDistSq = distSq;
+        nearest = enemy;
+      }
+    }
+    return nearest;
+  }
+
+  /**
    * Pack target distribution. Each pet picks the nearest target that no
    * packmate is already focusing, so the pack spreads over the swarm instead
    * of stacking on one creature. Bosses stay shareable, and when every enemy
@@ -3377,7 +3450,7 @@ export class GameEngine {
       multiplier *= 1 + Math.min(5, this.petFocusCount(target)) * profile.bonusPerAllyFocus;
     }
 
-    // Uivo Ancestral / Chamado dos Ancestrais buff the whole pack's bite.
+    // Uivo Ancestral buffs the whole pack's bite.
     multiplier *= this.petSpecialDamageBonus;
     return multiplier;
   }
@@ -3578,15 +3651,8 @@ export class GameEngine {
     const dy = enemy.y - this.player.y;
     if (dx * dx + dy * dy > this.domaAuraRadius * this.domaAuraRadius) return false;
 
-    // Chamado dos Ancestrais: with every slot taken, kills inside the aura are
-    // converted into pack healing plus fury instead of being wasted.
-    if (this.petAncestralTimer > 0 && this.pets.length >= this.petMaxSlots) {
-      for (let i = 0; i < this.pets.length; i++) this.pets[i].hp = this.pets[i].maxHp;
-      this.addPetFury(8);
-      this.vfx.addSparks(enemy.x, enemy.y, '#34d399', 8);
-      return false;
-    }
-
+    // Chamado da Matilha upgrades raise the pack cap, so kills are simply
+    // wasted once every slot is taken.
     if (this.pets.length >= this.petMaxSlots) return false;
 
     const pet = new Pet(
@@ -4132,7 +4198,7 @@ export class GameEngine {
             ? this.petHowlTimer > 0
             : slot === 2
               ? this.petWallTimer > 0
-              : this.petAncestralTimer > 0,
+              : this.petClones.length > 0,
         unlockHint: unlocked
           ? undefined
           : `Domar ${target} espécies · ${Math.min(species, target)}/${target} ou nível ${slot === 3 ? 30 : 15}`,
@@ -4155,9 +4221,9 @@ export class GameEngine {
           ),
           beastSpecial(
             3,
-            '🌿',
-            'Chamado dos Ancestrais',
-            'Por 10s a Aura de Doma triplica e todo abate dentro dela doma automaticamente. Pets curam 100% e ganham +50% dano.'
+            '🐾',
+            'Estouro da Matilha',
+            'Cada fera ativa se divide em 2 clones por 6s: +60% velocidade, +80% cadência e +10% dano. Os clones não ocupam vagas, ignoram Guarda/Agressivo e caçam por toda a tela.'
           ),
         ]
       : [
@@ -4342,6 +4408,9 @@ export class GameEngine {
     this.companions.render(ctx, camera, this.player);
     for (let i = 0; i < this.pets.length; i++) {
       this.pets[i].render(ctx, camera);
+    }
+    for (let i = 0; i < this.petClones.length; i++) {
+      this.petClones[i].render(ctx, camera);
     }
     for (let i = 0; i < this.petProjectiles.length; i++) {
       const shot = this.petProjectiles[i];

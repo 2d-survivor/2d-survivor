@@ -228,12 +228,12 @@ const BEAST_SPECIALS = [
       'As feras formam um anel (raio 150) e provocam a fauna num raio de 320 por 3 s. Por 5 s, pets recebem -30% de dano e o herói -20%, com empurrão inicial de 180.',
   },
   {
-    icon: '🌿',
-    name: 'Chamado dos Ancestrais',
+    icon: '🐾',
+    name: 'Estouro da Matilha',
     cost: 100,
     unlock: '17 espécies domadas na run ou nível 30',
     effect:
-      'Por 10 s, a Aura de Doma triplica de raio e todo abate dentro dela doma automaticamente. Pets curam 100% e ganham +50% de dano.',
+      'Cada fera ativa se divide em 2 clones por 6 s. Clones têm +60% velocidade, +80% cadência e +10% de dano, brilham em vermelho/dourado, não ocupam vagas, ignoram Guarda/Agressivo e caçam por toda a tela.',
   },
 ] as const;
 
@@ -297,8 +297,8 @@ const DomadorInfo: React.FC = () => (
           <strong>8 bichos</strong>.
         </p>
         <p className="mt-1.5 text-[#9ca3af]">
-          Com a matilha cheia, novos abates não domam. Durante o Chamado dos Ancestrais, esses abates
-          viram cura para os pets e +8 de Fúria.
+          Com a matilha cheia, novos abates não domam. O Estouro da Matilha não usa vagas: ele
+          multiplica temporariamente as feras que já estão em campo.
         </p>
       </InfoBlock>
     </div>

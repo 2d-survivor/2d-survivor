@@ -12,6 +12,12 @@ const EVOLUTION_AGE = 60;
 const EVOLUTION_HERO_LEVEL = 10;
 const LEVEL_GROWTH = 0.15;
 
+/** Estouro da Matilha clones: fast, furious and short-lived. */
+const CLONE_DURATION = 6;
+const CLONE_SPEED_MULTIPLIER = 1.6;
+const CLONE_ATTACK_SPEED_MULTIPLIER = 1.8;
+const CLONE_DAMAGE_MULTIPLIER = 1.1;
+
 /**
  * A fauna companion tamed by the Domador de Feras. It keeps the exact body of
  * the creature it was in the wild (reusing the enemy renderer) and only gets a
@@ -46,6 +52,10 @@ export class Pet {
   public readonly attackColor: string;
   /** Pulses fired by this pet, used by the cicada's every-third stun. */
   public pulseCount: number = 0;
+  /** Estouro da Matilha clone: temporary, off the pack bar and frantic. */
+  public isClone: boolean = false;
+  /** Remaining clone lifetime in seconds (0 for regular pets). */
+  public cloneTimer: number = 0;
   private readonly baseMaxHp: number;
   private readonly baseDamage: number;
   private syncedLevel: number = 1;
@@ -88,7 +98,41 @@ export class Pet {
   }
 
   public get attackInterval(): number {
-    return this.profile.cooldown;
+    return this.isClone
+      ? this.profile.cooldown / CLONE_ATTACK_SPEED_MULTIPLIER
+      : this.profile.cooldown;
+  }
+
+  /**
+   * Estouro da Matilha: builds a temporary twin of this pet at the given spot.
+   * The clone keeps the species (body, delivery and statuses) but runs 60%
+   * faster, attacks 80% faster and bites 10% harder.
+   */
+  public spawnClone(x: number, y: number): Pet {
+    const clone = new Pet(
+      x,
+      y,
+      this.type,
+      this.name,
+      this.baseMaxHp,
+      this.baseDamage,
+      false,
+      this.isElite
+    );
+    clone.isClone = true;
+    clone.cloneTimer = CLONE_DURATION;
+    clone.syncedLevel = this.syncedLevel;
+    clone.evolved = this.evolved;
+    clone.radius = this.radius;
+    clone.armor = this.armor;
+    clone.regenPercent = this.regenPercent;
+    clone.domadorHpMultiplier = this.domadorHpMultiplier;
+    clone.domadorDamageMultiplier = this.domadorDamageMultiplier * CLONE_DAMAGE_MULTIPLIER;
+    clone.recomputeStats();
+    clone.hp = clone.maxHp;
+    clone.speed = this.speed * CLONE_SPEED_MULTIPLIER;
+    clone.facingX = this.facingX;
+    return clone;
   }
 
   /** Hero levels grant +15% HP and damage per level (additive). */
@@ -176,8 +220,13 @@ export class Pet {
     const screen = camera.worldToScreen(this.x, this.y);
 
     // Glowing ally aura: a soft halo around the body plus a pulsing ring on
-    // the ground. Gold for common tamed fauna, emerald once evolved.
-    const glowRgb = this.evolved ? '52, 211, 153' : '251, 191, 36';
+    // the ground. Gold for common tamed fauna, emerald once evolved and a
+    // feral crimson for Estouro da Matilha clones.
+    const glowRgb = this.isClone
+      ? '248, 113, 113'
+      : this.evolved
+        ? '52, 211, 153'
+        : '251, 191, 36';
     const pulse = 0.75 + Math.sin(this.animTimer * 4) * 0.25;
     const auraRadius = this.radius * (this.isElite ? 2.9 : 2.4);
 
@@ -216,6 +265,27 @@ export class Pet {
     );
     ctx.stroke();
     ctx.restore();
+
+    // Clones carry an extra dashed gold ring so they stand out even in a
+    // crowded pack.
+    if (this.isClone) {
+      ctx.save();
+      ctx.strokeStyle = `rgba(251, 191, 36, ${0.45 + 0.35 * pulse})`;
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.ellipse(
+        screen.x,
+        screen.y + this.radius * 0.8,
+        this.radius * 1.65,
+        this.radius * 0.68,
+        0,
+        0,
+        Math.PI * 2
+      );
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // Same body, animation and facing the species uses in the wild.
     this.visual.x = this.x;

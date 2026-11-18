@@ -4,6 +4,9 @@ import { Player } from './Player';
 import { GORILLA_CHARGE, GORILLA_SKILL_SPEED, GORILLA_SLAM_COOLDOWN } from '../data/gorilla';
 import { ANACONDA } from '../data/anaconda';
 
+/** Every ecology predator reloads its devour hunt on this fixed cycle. */
+const ECOLOGY_PREDATOR_COOLDOWN = 6;
+
 export type BossOrEliteState =
   | 'idle'
   | 'telegraph_dash'
@@ -55,7 +58,6 @@ export class Enemy {
   public ecologyTargetTreeId: number | null = null;
   public ecologyHuntTimer: number = 0;
   public ecologyActionCooldown: number = 0;
-  public ecologyGrazingTimer: number = 0;
   public growthScale: number = 1;
   public ecologyFedCount: number = 0;
   public shieldHp: number = 0;
@@ -603,14 +605,9 @@ export class Enemy {
       this.growthScale = 1 / 6;
     }
 
-    // Predators start their hunt cycle with the requested delay. The Jacaré-açu
-    // and its hatchling hunt on a fixed 12 s cycle.
-    if (this.type === 'elite_black_caiman' || this.type === 'baby_black_caiman') {
-      this.ecologyHuntTimer = 12;
-    } else if (this.type === 'boss_cobra_grande' || this.type === 'sucuri') {
-      this.ecologyHuntTimer = 10 + Math.random() * 2;
-    } else if (this.type === 'elite_jaguar') {
-      this.ecologyHuntTimer = 15;
+    // Predators start with a full hunt cycle before their first meal.
+    if (this.isEcologyPredator) {
+      this.ecologyHuntTimer = ECOLOGY_PREDATOR_COOLDOWN;
     }
 
     this.hp = this.maxHp;
@@ -651,18 +648,6 @@ export class Enemy {
       this.type === 'boss_iara' ||
       this.type === 'boss_vitoria_regia' ||
       this.type === 'boss_cobra_grande'
-    );
-  }
-
-  /** Herbivores that leave the hunt to graze on the riverbank crops. */
-  public get isGrazingHerbivore(): boolean {
-    return (
-      this.type === 'capybara' ||
-      this.type === 'sloth' ||
-      this.type === 'rhino_beetle' ||
-      this.type === 'sawyer_beetle' ||
-      this.type === 'bullet_ant' ||
-      this.type === 'leafcutter_ant'
     );
   }
 
@@ -833,10 +818,10 @@ export class Enemy {
     const movementMult = speedMult * (this.isAmazonNight ? 1.25 : 1.0);
 
     // River predators flee while the hero stays in the forest. They only
-    // charge (and use their skills) once the hero steps into the water. The
-    // Earth combo is the exception: a stunned hero lets the Cobra-Grande haul
-    // out and commit to its colossal trample.
-    if (this.isRiverPredator && !this.playerInWater) {
+    // charge (and use their skills) once the hero steps into the water, unless
+    // they are chasing a meal. The Earth combo is the exception: a stunned hero
+    // lets the Cobra-Grande haul out and commit to its colossal trample.
+    if (this.isRiverPredator && !this.playerInWater && this.ecologyTargetX === null) {
       const canTrample =
         this.type === 'boss_cobra_grande' &&
         (this.comboChargeActive || (this.earthComboActive && this.playerStunned));
@@ -855,8 +840,9 @@ export class Enemy {
 
     if (this.isJaguarPredator && this.updateJaguar(dt, player, dist)) return this.hp > 0;
 
-    // Elite & Boss special skill state machine
-    if (!this.isJaguarPredator && (this.isElite || this.isBoss)) {
+    // Elite & Boss special skill state machine. A predator that locked onto
+    // prey skips player-directed skills and just runs down its meal.
+    if (!this.isJaguarPredator && this.ecologyTargetX === null && (this.isElite || this.isBoss)) {
       this.updateSpecialSkills(dt, dx, dy, dist, speedMult);
     }
 
@@ -954,6 +940,8 @@ export class Enemy {
   private updateJaguar(dt: number, player: Player, dist: number): boolean {
     this.jaguarChargeStep = false;
     if (this.jaguarState === 'idle') {
+      // A ready hunt outranks the hero: walk to the prey instead of pouncing.
+      if (this.ecologyTargetX !== null) return false;
       if (dist > 0) {
         this.jaguarDirX = (player.x - this.x) / dist;
         this.jaguarDirY = (player.y - this.y) / dist;
