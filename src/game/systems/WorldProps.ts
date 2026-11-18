@@ -104,6 +104,8 @@ const MUD_BAND = 130;
 
 // Movement penalties applied while wading through water or trudging in mud.
 export const WATER_SPEED_MULTIPLIER = 0.7;
+export const SHALLOW_WATER_SPEED_MULTIPLIER = 0.82;
+export const DEEP_WATER_SPEED_MULTIPLIER = 0.65;
 export const MUD_SPEED_MULTIPLIER = 0.8;
 
 // Iara's Dynamic Flood expands the river/lakes until 70% of the dry land is
@@ -372,6 +374,8 @@ export class WorldSystem {
   private decorTreeIndex: StaticSpatialIndex<DecorTreeProp> | null = null;
   private readonly decorMetrics = new WeakMap<DecorTreeProp, DecorTreeMetrics>();
   private readonly foregroundCanopies: DecorTreeProp[] = [];
+  private readonly foregroundTrees: TreeProp[] = [];
+  private readonly foregroundFruitTrees: FruitTreeProp[] = [];
   private readonly riverPaths = new Map<string, Path2D>();
 
   private forestGroundPattern: CanvasPattern | null = null;
