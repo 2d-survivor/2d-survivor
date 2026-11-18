@@ -8,6 +8,10 @@ import { Camera } from '../engine/Camera';
 import { SoundEngine } from '../engine/SoundEngine';
 import { VFXManager } from '../entities/VFX';
 
+// A fusion needs its weapon maxed, but the partner passive only has to reach
+// this level. Requiring 10 + 10 pushed every fusion out of a normal run.
+const FUSION_PASSIVE_LEVEL = 8;
+
 export type ProjectileVisualType =
   | 'bottle_51'
   | 'bow'
@@ -392,7 +396,11 @@ export class WeaponSystem {
     }
   }
 
-  /** Supreme Fusion: consumes both level-10 components and equips the result at level 1. */
+  /**
+   * Supreme Fusion: consumes both components and equips the result at level 1.
+   * The weapon must be at max level; the passive only needs to reach the fusion
+   * threshold so a fusion fits inside a normal run.
+   */
   applyFusion(option: UpgradeOption, player: Player): void {
     const weaponId = option.baseId;
     const passiveId = option.fusionPassiveId;
@@ -4247,14 +4255,20 @@ export class WeaponSystem {
     return undefined;
   }
 
-  /** Returns one card per fusion recipe whose weapon and passive are both maxed. */
+  /** Returns one card per fusion recipe whose weapon and passive are ready. */
   private collectFusionOptions(): UpgradeOption[] {
     if (!this.maxItemLevel || !this.itemUpgradesEnabled) return [];
     const ready: UpgradeOption[] = [];
     for (const recipe of FUSION_RECIPES) {
       const weapon = this.weapons.get(recipe.weaponId);
       const passive = this.passives.get(recipe.passiveId);
-      if (weapon && passive && weapon.level >= weapon.maxLevel && passive.level >= passive.maxLevel) {
+      const passiveRequired = Math.min(passive?.maxLevel ?? 0, FUSION_PASSIVE_LEVEL);
+      if (
+        weapon &&
+        passive &&
+        weapon.level >= weapon.maxLevel &&
+        passive.level >= passiveRequired
+      ) {
         ready.push({
           type: 'fusion',
           id: recipe.resultId,

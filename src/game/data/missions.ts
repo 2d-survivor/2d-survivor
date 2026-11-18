@@ -1,4 +1,5 @@
 import {
+  DifficultyId,
   MissionDefinition,
   MissionMetric,
   MissionProgressBucket,
@@ -10,6 +11,37 @@ import {
 const DAY_MS = 86_400_000;
 export const DAILY_MISSION_COUNT = 4;
 export const SECRET_PERIOD_KEY = 'lifetime';
+
+// Mission rewards scale with the hardest difficulty that fed the progress, so
+// playing on Hard and above is worth more than farming the easy mode.
+const DIFFICULTY_RANK: DifficultyId[] = ['easy', 'normal', 'hard', 'nightmare', 'infernal'];
+const MISSION_DIFFICULTY_REWARD: Record<DifficultyId, number> = {
+  easy: 1,
+  normal: 1,
+  hard: 1.25,
+  nightmare: 1.5,
+  infernal: 1.85,
+};
+
+function sanitizeDifficulty(value: unknown): DifficultyId | undefined {
+  return typeof value === 'string' && DIFFICULTY_RANK.includes(value as DifficultyId)
+    ? (value as DifficultyId)
+    : undefined;
+}
+
+function harderDifficulty(
+  a: DifficultyId | undefined,
+  b: DifficultyId | undefined
+): DifficultyId | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  return DIFFICULTY_RANK.indexOf(a) >= DIFFICULTY_RANK.indexOf(b) ? a : b;
+}
+
+/** Reward multiplier earned by the difficulty that fed the mission progress. */
+export function getMissionRewardMultiplier(difficulty?: DifficultyId): number {
+  return difficulty ? MISSION_DIFFICULTY_REWARD[difficulty] ?? 1 : 1;
+}
 
 // Next.js prerenders Client Components and treats `new Date()` as unstable IO.
 // Use a deterministic date during the server prerender; the real date is only
@@ -83,6 +115,7 @@ interface BucketCandidate {
   periodKey?: unknown;
   progress?: unknown;
   claimed?: unknown;
+  difficulty?: unknown;
 }
 
 function sanitizeProgress(value: unknown): Record<string, number> {
@@ -111,6 +144,7 @@ function normalizeBucket(
     periodKey,
     progress: sanitizeProgress(candidate.progress),
     claimed: sanitizeClaimed(candidate.claimed),
+    difficulty: sanitizeDifficulty(candidate.difficulty),
   };
 }
 
@@ -182,7 +216,11 @@ export function applyRunToMissions(
       const current = progress[mission.id] ?? 0;
       progress[mission.id] = Math.min(mission.target, current + gained);
     }
-    return { ...bucket, progress };
+    return {
+      ...bucket,
+      progress,
+      difficulty: harderDifficulty(bucket.difficulty, run.difficulty),
+    };
   };
 
   return {
@@ -225,11 +263,14 @@ export function claimMissionReward(
     secret: mission.period === 'secret' ? updatedBucket : missions.secret,
   };
 
+  const rewardMultiplier = getMissionRewardMultiplier(bucket.difficulty);
+
   return {
     data: {
       ...normalizedData,
-      gold: Math.max(0, normalizedData.gold ?? 0) + mission.goldReward,
-      accountXp: Math.max(0, normalizedData.accountXp ?? 0) + mission.xpReward,
+      gold: Math.max(0, normalizedData.gold ?? 0) + Math.round(mission.goldReward * rewardMultiplier),
+      accountXp:
+        Math.max(0, normalizedData.accountXp ?? 0) + Math.round(mission.xpReward * rewardMultiplier),
       missions: updatedMissions,
     },
     claimed: true,

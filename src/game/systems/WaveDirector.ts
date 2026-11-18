@@ -48,9 +48,63 @@ const AMAZON_AQUATIC_MEDIUM_ENEMIES: EnemyType[] = ['pink_river_dolphin'];
 const AMAZON_AQUATIC_RESISTANT_ENEMIES: EnemyType[] = ['giant_otter'];
 const AMAZON_AQUATIC_ELITE_ENEMIES: EnemyType[] = ['elite_black_caiman'];
 
+// Boss waves: 05:00, 09:00, 14:00 and 17:30. Each wave brings more folklore
+// bosses than the last (1 -> 2 -> 3 -> 4), so all ten bosses still appear in a
+// single run without a boss spawning every 90 seconds.
+const AMAZON_BOSS_WAVE_TIMES = [300, 540, 840, 1050];
+const AMAZON_BOSS_WAVE_COUNTS = [1, 2, 3, 4];
+const AMAZON_BOSS_ORDER: EnemyType[] = [
+  'boss_curupira',
+  'boss_saci',
+  'boss_boto',
+  'boss_iara',
+  'boss_caipora',
+  'boss_matinta',
+  'boss_vitoria_regia',
+  'boss_mapinguari',
+  'boss_cobra_grande',
+  'boss_boitata',
+];
+
+// Siege events: a full ring of fauna closes in on the hero. Each siege also
+// brings an elite, which guarantees a chest once it dies.
+const AMAZON_SIEGES: {
+  time: number;
+  key: string;
+  type: EnemyType;
+  hp: number;
+  name: string;
+  alert: string;
+}[] = [
+  {
+    time: 150,
+    key: 'siege_150',
+    type: 'bullet_ant',
+    hp: 0.95,
+    name: 'Vanguarda do Cerco',
+    alert: '🐜 CERCO DE FORMIGAS-BALA! A MATA FECHOU O CERCO!',
+  },
+  {
+    time: 450,
+    key: 'siege_450',
+    type: 'sawyer_beetle',
+    hp: 1.1,
+    name: 'Carniceiro do Cerco',
+    alert: '🪲 CERCO DE BESOUROS-SERRADORES!',
+  },
+  {
+    time: 660,
+    key: 'siege_660',
+    type: 'bat',
+    hp: 1.2,
+    name: 'Senhor do Cerco Noturno',
+    alert: '🦇 CERCO NOTURNO DE MORCEGOS!',
+  },
+];
+
 // On Hard, Nightmare and Infernal the simultaneous Amazon bosses are no
-// longer copies of the same boss: each wave brings a fixed elemental combo.
-// Easy and Normal keep spawning the single bosses in their original order.
+// longer copies of the same boss: each wave is announced with a fixed
+// elemental combo name.
 const AMAZON_ELEMENTAL_COMBOS: { name: string; types: EnemyType[] }[] = [
   {
     name: 'Combo da Pira Sagrada',
@@ -78,9 +132,8 @@ export class WaveDirector {
   private nextEnemyId: number = 1;
   private spawnTimer: number = 0;
   private nextAmazonEliteTime: number = 80 + Math.random() * 40;
-  private nextAmazonBossTime: number = 300;
   private nextAmazonEliteHordeTime: number = 1120;
-  private amazonBossWave: number = 0;
+  private amazonBossOrderPointer: number = 0;
   // The adult Jacaré-açu and its hatchling are tracked on independent timers
   // so the baby mechanic can never starve the adult out of the spawn rotation.
   private nextAmazonCaimanTime: number = 45 + Math.random() * 30;
@@ -132,13 +185,15 @@ export class WaveDirector {
       this.bossActive = enemies.find((e) => e.isBoss && e.hp > 0) ?? null;
     }
 
-    // Smooth early scaling + steeper late/endless scaling
+    // Smooth early scaling + steeper late/endless scaling. The HP curve is
+    // gentler than before because the horde now keeps growing in size and
+    // frequency instead of flattening out at the six-minute mark.
     const minutes = this.survivalTime / 60;
     const endlessExtra = minutes > 5 ? Math.pow(minutes - 5, 1.35) * 0.45 : 0;
-    const hpMultiplier = (1.0 + minutes * 0.52 + endlessExtra) * this.difficulty.enemyHp;
-    const spawnInterval = Math.max(0.11, 0.56 - minutes * 0.085) / this.difficulty.spawnRate;
+    const hpMultiplier = (1.0 + minutes * 0.44 + endlessExtra) * this.difficulty.enemyHp;
+    const spawnInterval = Math.max(0.07, 0.56 - minutes * 0.085) / this.difficulty.spawnRate;
     const maxEnemies = Math.min(
-      420,
+      760,
       Math.floor((95 + Math.floor(minutes * 58)) * this.difficulty.enemyCount)
     );
 
@@ -204,14 +259,17 @@ export class WaveDirector {
     }
 
     // Rare Amazon Forest elite: one of the map's oversized predators appears
-    // from time to time on top of the regular waves. The Jacaré-açu only
-    // replaces the land elite when there is water just outside the camera.
+    // from time to time on top of the regular waves. Elites wait while a boss
+    // is alive so both events never compete for the same spotlight. The Jacaré-
+    // açu only replaces the land elite when there is water just outside the
+    // camera.
     if (
       this.isAmazonForest &&
+      !amazonBossFight &&
       this.survivalTime >= this.nextAmazonEliteTime &&
       enemies.length < maxEnemies
     ) {
-      this.nextAmazonEliteTime = this.survivalTime + 90 + Math.random() * 60;
+      this.nextAmazonEliteTime = this.survivalTime + 120 + Math.random() * 60;
       let eliteType =
         AMAZON_ELITE_ENEMIES[Math.floor(Math.random() * AMAZON_ELITE_ENEMIES.length)];
       let elitePos = this.getSpawnPositionOutsideScreen(camera);
@@ -272,20 +330,32 @@ export class WaveDirector {
       }
     }
 
-    // Event 5: 05:00 - Amazon boss waves every 90s.
-    // Easy and Normal spawn the 10 folklore bosses solo, ending with Boitatá at
-    // 18:30. Hard, Nightmare and Infernal instead bring the fixed elemental
-    // combos together. After the 10th wave only the elite hordes below spawn.
-    if (
-      this.isAmazonForest &&
-      sec >= this.nextAmazonBossTime &&
-      this.amazonBossWave < 10
-    ) {
-      this.nextAmazonBossTime += 90;
-      this.spawnAmazonBossWave(camera, hpMultiplier, onSpawn, sound);
+    // Siege events: a full ring of fauna closes in on the hero. Each siege
+    // also brings an elite, which guarantees a chest once it dies.
+    for (const siege of AMAZON_SIEGES) {
+      if (sec >= siege.time && !this.triggeredEvents.has(siege.key)) {
+        this.triggeredEvents.add(siege.key);
+        this.triggerAlert(siege.alert, 4.5);
+        sound.playBossWarning();
+        this.spawnRingEnemies(player, hpMultiplier * siege.hp, siege.type, onSpawn);
+        this.spawnElite(player, camera, hpMultiplier * 1.05, siege.name, onSpawn);
+      }
     }
 
-    // After Boitatá (18:30), the forest keeps the pressure up with intense
+    // Event 5: Amazon boss waves at 05:00, 09:00, 14:00 and 17:30. Each wave
+    // brings more folklore bosses than the last (1 -> 2 -> 3 -> 4), so all ten
+    // bosses still appear across a single run without a boss every 90 s.
+    if (this.isAmazonForest) {
+      const bossWaveIndex = AMAZON_BOSS_WAVE_TIMES.findIndex(
+        (time, index) => sec >= time && !this.triggeredEvents.has(`boss_wave_${index}`)
+      );
+      if (bossWaveIndex >= 0) {
+        this.triggeredEvents.add(`boss_wave_${bossWaveIndex}`);
+        this.spawnAmazonBossWave(camera, hpMultiplier, onSpawn, sound, bossWaveIndex);
+      }
+    }
+
+    // After the last boss wave, the forest keeps the pressure up with intense
     // elite packs until the 20:00 mark.
     if (
       this.isAmazonForest &&
@@ -474,7 +544,8 @@ export class WaveDirector {
     camera: Camera,
     hpMult: number,
     onSpawn: (enemy: Enemy) => void,
-    sound: SoundEngine
+    sound: SoundEngine,
+    waveIndex: number
   ): void {
     const simultaneous =
       this.difficulty.id === 'hard'
@@ -482,37 +553,19 @@ export class WaveDirector {
         : this.difficulty.id === 'nightmare' || this.difficulty.id === 'infernal'
           ? 3
           : 1;
-    const order: EnemyType[] = [
-      'boss_curupira',
-      'boss_saci',
-      'boss_boto',
-      'boss_iara',
-      'boss_caipora',
-      'boss_matinta',
-      'boss_vitoria_regia',
-      'boss_mapinguari',
-      'boss_cobra_grande',
-      'boss_boitata',
-    ];
-    const type = order[this.amazonBossWave % order.length];
-    const combo =
-      simultaneous > 1
-        ? AMAZON_ELEMENTAL_COMBOS[this.amazonBossWave % AMAZON_ELEMENTAL_COMBOS.length]
-        : null;
-    const comboAppearance = Math.floor(this.amazonBossWave / AMAZON_ELEMENTAL_COMBOS.length);
-    this.amazonBossWave += 1;
+    // Later waves bring more folklore bosses at once. Hard and above keep
+    // their minimum of simultaneous bosses.
+    const waveCount = AMAZON_BOSS_WAVE_COUNTS[waveIndex] ?? 1;
+    const count = Math.max(waveCount, simultaneous);
 
     const bossTypes: EnemyType[] = [];
-    if (combo) {
-      const availableTypes = combo.types.filter(
-        (bossType) => bossType !== 'boss_boitata' || this.survivalTime >= 600
-      );
-      for (let i = 0; i < Math.min(simultaneous, availableTypes.length); i++) {
-        bossTypes.push(availableTypes[(comboAppearance + i) % availableTypes.length]);
-      }
-    } else {
-      bossTypes.push(type);
+    for (let i = 0; i < count; i++) {
+      bossTypes.push(AMAZON_BOSS_ORDER[this.amazonBossOrderPointer % AMAZON_BOSS_ORDER.length]);
+      this.amazonBossOrderPointer += 1;
     }
+
+    const combo =
+      count > 1 ? AMAZON_ELEMENTAL_COMBOS[waveIndex % AMAZON_ELEMENTAL_COMBOS.length] : null;
 
     let bossName = '';
     for (let i = 0; i < bossTypes.length; i++) {

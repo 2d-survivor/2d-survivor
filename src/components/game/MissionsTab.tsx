@@ -7,6 +7,7 @@ import {
   formatMissionProgress,
   getActiveMissions,
   getMissionProgress,
+  getMissionRewardMultiplier,
   isMissionClaimed,
   isMissionComplete,
   normalizeMissionState,
@@ -67,6 +68,9 @@ export const MissionsTab: React.FC<MissionsTabProps> = ({ savedData, onUpdateSav
     const claimed = isMissionClaimed(missions, mission);
     const revealed = mission.period !== 'secret' || complete || claimed;
     const percentage = Math.min(100, Math.round((progress / mission.target) * 100));
+    const rewardMultiplier = getMissionRewardMultiplier(missions[mission.period].difficulty);
+    const goldReward = Math.round(mission.goldReward * rewardMultiplier);
+    const xpReward = Math.round(mission.xpReward * rewardMultiplier);
 
     return (
       <div
@@ -98,10 +102,10 @@ export const MissionsTab: React.FC<MissionsTabProps> = ({ savedData, onUpdateSav
             {revealed ? (
               <div className="flex flex-col items-end gap-0.5 font-mono text-[11px]">
                 <span className="text-yellow-300 flex items-center gap-1">
-                  <Coins className="w-3 h-3" /> {mission.goldReward}
+                  <Coins className="w-3 h-3" /> {goldReward}
                 </span>
                 <span className="text-purple-300 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" /> {mission.xpReward} XP
+                  <Sparkles className="w-3 h-3" /> {xpReward} XP
                 </span>
               </div>
             ) : (

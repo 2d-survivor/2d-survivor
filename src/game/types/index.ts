@@ -234,6 +234,8 @@ export interface MissionProgressBucket {
   periodKey: string;
   progress: Record<string, number>;
   claimed: string[];
+  /** Hardest difficulty that contributed progress to this bucket. */
+  difficulty?: DifficultyId;
 }
 
 export interface MissionSaveState {
@@ -248,6 +250,7 @@ export interface MissionRunStats {
   goldCollected: number;
   bossesDefeated: number;
   wins: number;
+  difficulty?: DifficultyId;
 }
 
 export type EquipmentSlot = 'armor' | 'boots' | 'gloves' | 'helmet' | 'weapon';

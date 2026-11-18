@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { UpgradeOption } from '@/game/types';
+import { LEVEL_UP_REROLLS } from '@/game/engine/GameEngine';
 import { renderNamedIcon } from './GameIcons';
 import { Crown, Sparkles } from 'lucide-react';
 
@@ -141,7 +142,7 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({ options, onSelect, o
           disabled={rerollsRemaining === 0}
           className="mt-4 rounded-lg border border-amber-500 px-5 py-2 text-sm font-bold text-amber-300 hover:bg-amber-900/40 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Rerrolar ({rerollsRemaining}/2)
+          Rerrolar ({rerollsRemaining}/{LEVEL_UP_REROLLS})
         </button>
         <div className="mt-4 text-slate-500 text-[11px] text-center">
           {isPetLevelUp

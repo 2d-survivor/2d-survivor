@@ -6,7 +6,7 @@ import { CHARACTERS } from '@/game/data/characters';
 import { loadSavedData } from '@/game/data/persistence';
 import { getDifficulty } from '@/game/data/difficulties';
 import { DEFAULT_MAP_ID } from '@/game/data/maps';
-import { GameEngine } from '@/game/engine/GameEngine';
+import { GameEngine, LEVEL_UP_REROLLS } from '@/game/engine/GameEngine';
 import { HUD } from './HUD';
 import { CharacterHUD } from './CharacterHUD';
 import { StartScreen } from './StartScreen';
@@ -50,7 +50,7 @@ export const GameContainer: React.FC = () => {
   );
   const [selectedMap, setSelectedMap] = useState<MapId>(DEFAULT_MAP_ID);
   const [hud, setHud] = useState<HUDState>(DEFAULT_HUD);
-  const [rerollsRemaining, setRerollsRemaining] = useState(2);
+  const [rerollsRemaining, setRerollsRemaining] = useState(LEVEL_UP_REROLLS);
   const [levelUpOptions, setLevelUpOptions] = useState<UpgradeOption[]>([]);
   const [chestReward, setChestReward] = useState<{ gold: number; upgrade?: UpgradeOption } | null>(null);
   const [endSummary, setEndSummary] = useState<GameEndSummary | null>(null);
@@ -127,7 +127,7 @@ export const GameContainer: React.FC = () => {
         },
         onLevelUp: (options) => {
           setLevelUpOptions(options);
-          setRerollsRemaining(2);
+          setRerollsRemaining(LEVEL_UP_REROLLS);
           gameStateRef.current = 'level_up';
           setGameState('level_up');
         },

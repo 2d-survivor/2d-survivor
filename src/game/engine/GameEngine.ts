@@ -242,6 +242,9 @@ const SUCURI_PREY: EnemyType[] = [
 
 // Derson's Special 1 — Entrega Expressa.
 const SPECIAL_1_COOLDOWN = 20;
+
+/** Rerolls available on every level-up screen. */
+export const LEVEL_UP_REROLLS = 3;
 const SPECIAL_1_DASH_DURATION = 2.5;
 const SPECIAL_1_TRAIL_INTERVAL = 0.1;
 const SPECIAL_1_TRAIL_RADIUS = 48;
@@ -2006,7 +2009,7 @@ export class GameEngine {
         this.sound.playLevelUp();
         this.pause();
         this.syncHUD();
-        this.levelUpRerollsRemaining = 2;
+        this.levelUpRerollsRemaining = LEVEL_UP_REROLLS;
         this.callbacks.onLevelUp(options);
         return;
       }
@@ -2342,6 +2345,12 @@ export class GameEngine {
       }
 
       if (enemy.isEcologyPredator) {
+        if (enemy.isFullyGrown) {
+          // Fully grown: no more meals, back to hunting the hero for good.
+          enemy.ecologyTargetX = null;
+          enemy.ecologyTargetY = null;
+          continue;
+        }
         if (enemy.ecologyHuntTimer > 0) {
           enemy.ecologyHuntTimer = Math.max(0, enemy.ecologyHuntTimer - dt);
           enemy.ecologyTargetX = null;
@@ -2437,6 +2446,7 @@ export class GameEngine {
     for (let i = 0; i < this.enemies.length; i++) {
       const predator = this.enemies[i];
       if (!predator.isEcologyPredator || predator.hp <= 0 || predator.jaguarBusy) continue;
+      if (predator.isFullyGrown) continue;
       if (predator.ecologyHuntTimer > 0) continue;
 
       const prey = this.findPredatorPrey(predator, devoured);
@@ -3760,6 +3770,25 @@ export class GameEngine {
         enemy.type === 'elite_black_caiman';
       this.drops.push(new Drop(Date.now() + Math.random(), 'chest', enemy.x, enemy.y));
       this.player.xp += enemy.xpValue * (isAmazonElite ? 2 : 1) * this.player.xpMultiplier;
+      // A predator that devoured fauna is a walking bounty: every meal it ate
+      // pays back extra XP and coins, so the threat is worth hunting down.
+      const meals = enemy.ecologyFedCount;
+      if (meals > 0) {
+        this.player.xp +=
+          Math.round(enemy.xpValue * Math.min(6, meals) * 0.35 * this.player.xpMultiplier);
+        const coinCount = Math.min(4, 1 + Math.floor(meals / 2));
+        for (let i = 0; i < coinCount; i++) {
+          this.drops.push(
+            new Drop(
+              Date.now() + 5 + i,
+              'coin',
+              enemy.x + (i - (coinCount - 1) / 2) * 34,
+              enemy.y,
+              60 + meals * 10
+            )
+          );
+        }
+      }
       if (isAmazonElite) {
         // Rare forest elites are walking treasure piñatas: bonus XP and gold.
         this.drops.push(new Drop(Date.now() + 3 + Math.random(), 'coin', enemy.x + 30, enemy.y, 90));
@@ -3829,7 +3858,7 @@ export class GameEngine {
         if (options.length > 0) {
           this.sound.playLevelUp();
           this.pause();
-          this.levelUpRerollsRemaining = 2;
+          this.levelUpRerollsRemaining = LEVEL_UP_REROLLS;
           this.callbacks.onLevelUp(options);
         }
       }
@@ -3969,7 +3998,7 @@ export class GameEngine {
     }
   }
 
-  private levelUpRerollsRemaining = 2;
+  private levelUpRerollsRemaining = LEVEL_UP_REROLLS;
 
   public rerollLevelUp(current: UpgradeOption[]): { options: UpgradeOption[]; remaining: number } | null {
     if (!this.isPaused || this.isGameOver || this.levelUpRerollsRemaining <= 0) return null;
@@ -4025,7 +4054,7 @@ export class GameEngine {
       if (nextOptions.length > 0) {
         this.sound.playLevelUp();
         this.pause();
-        this.levelUpRerollsRemaining = 2;
+        this.levelUpRerollsRemaining = LEVEL_UP_REROLLS;
         this.callbacks.onLevelUp(nextOptions);
         return;
       }
@@ -4133,6 +4162,7 @@ export class GameEngine {
         current.bossesDefeated - this.missionSnapshot.bossesDefeated
       ),
       wins: won ? 1 : 0,
+      difficulty: this.difficulty.id,
     });
     this.missionSnapshot = current;
     saveGameData(missionData);
@@ -5767,7 +5797,7 @@ export class GameEngine {
     if (options.length > 0) {
       this.sound.playLevelUp();
       this.pause();
-      this.levelUpRerollsRemaining = 2;
+      this.levelUpRerollsRemaining = LEVEL_UP_REROLLS;
       this.callbacks.onLevelUp(options);
     }
   }

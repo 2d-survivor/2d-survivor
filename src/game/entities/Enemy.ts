@@ -681,10 +681,12 @@ export class Enemy {
   /**
    * Grows after devouring prey. Jacaré-açu/Sucuri gain +15% max HP and +12%
    * damage per meal; the Onça also becomes faster. The Jacaré-açu and its
-   * hatchling add +20% body size per meal, from hatchling to adult and beyond.
-   * No growth cap.
+   * hatchling add +20% body size per meal, from hatchling to adult and beyond,
+   * up to 3x their starting frame. Other predators stop at 2x. Once fully
+   * grown, meals no longer stack, so a predator can never snowball forever.
    */
   public growFromPrey(): void {
+    if (this.isFullyGrown) return;
     const oldMaxHp = this.maxHp;
     if (this.isJaguarPredator) {
       this.maxHp = Math.round(this.maxHp * 1.12);
@@ -695,9 +697,24 @@ export class Enemy {
       this.damage = Math.max(1, Math.round(this.damage * 1.12));
     }
     this.hp = Math.min(this.maxHp, this.hp + Math.max(1, this.maxHp - oldMaxHp));
-    this.growthScale *=
-      this.type === 'elite_black_caiman' || this.type === 'baby_black_caiman' ? 1.2 : 1.07;
+    this.growthScale = Math.min(
+      this.maxGrowthScale,
+      this.growthScale *
+        (this.type === 'elite_black_caiman' || this.type === 'baby_black_caiman' ? 1.2 : 1.07)
+    );
     this.ecologyFedCount += 1;
+  }
+
+  /** Size cap for the eat-and-grow mechanic, relative to the spawn frame. */
+  public get maxGrowthScale(): number {
+    if (this.type === 'elite_black_caiman') return 1;
+    if (this.type === 'baby_black_caiman') return 0.5;
+    return 2;
+  }
+
+  /** A predator at its size cap stops hunting and turns back on the hero. */
+  public get isFullyGrown(): boolean {
+    return this.growthScale >= this.maxGrowthScale - 0.0001;
   }
 
   public isDebuffed(): boolean {
