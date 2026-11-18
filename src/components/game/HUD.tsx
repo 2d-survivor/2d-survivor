@@ -8,9 +8,11 @@ import { HUNTER_FISH_TARGET } from '@/game/data/hunterQuest';
 import {
   PET_DELIVERY_LABEL,
   PET_ROLE_LABEL,
+  getPetAttackProfile,
   type PetDelivery,
   type PetRole,
 } from '@/game/data/petAttacks';
+import { describePetStatuses, formatPetSynergySentence, getPetGuide } from '@/game/data/petGuide';
 import { renderWeaponIcon, renderPassiveIcon, renderNamedIcon } from './GameIcons';
 import {
   Skull,
@@ -97,11 +99,17 @@ export const HUD: React.FC<HUDProps> = ({
   const tameSpecies = hud.tameSpecies;
   const hasTameBar = !!tameSpecies && tameSpecies.length > 0;
   const [domaOpen, setDomaOpen] = React.useState(true);
+  const [hoveredSpecies, setHoveredSpecies] = React.useState<EnemyType | null>(null);
   const domaExpanded = hasTameBar && domaOpen;
   const unlockedSpeciesCount = tameSpecies ? tameSpecies.filter((species) => species.unlocked).length : 0;
   const petSlots = hud.petSlots ?? hud.pets?.length ?? 0;
   const petBarOffset = domaExpanded ? 'bottom-[10.5rem]' : 'bottom-4';
   const questPanelOffset = domaExpanded ? 'bottom-[22rem]' : 'bottom-[11.5rem]';
+  const hoveredSpeciesMeta = hoveredSpecies
+    ? tameSpecies?.find((species) => species.type === hoveredSpecies)
+    : undefined;
+  const hoveredGuide = hoveredSpecies ? getPetGuide(hoveredSpecies) : undefined;
+  const hoveredProfile = hoveredSpecies ? getPetAttackProfile(hoveredSpecies) : undefined;
   const nativeWeapon = hud.nativeWeapon;
   const attackCount = Math.min(4, hud.weapons.length + (nativeWeapon ? 1 : 0));
 
@@ -319,7 +327,34 @@ export const HUD: React.FC<HUDProps> = ({
       <div className="flex flex-col gap-1">
         {/* Doma bar: Domador de Feras species filter. Collapsible next to the minimap. */}
         {domaExpanded && (
-          <div className="pointer-events-auto mx-auto flex w-full max-w-[min(96vw,48rem)] flex-col gap-1 rounded-xl border border-amber-700/60 bg-slate-950/90 px-2 py-1.5 shadow-2xl backdrop-blur-md">
+          <div className="pointer-events-auto relative z-30 mx-auto flex w-full max-w-[min(96vw,48rem)] flex-col gap-1 rounded-xl border border-amber-700/60 bg-slate-950/90 px-2 py-1.5 shadow-2xl backdrop-blur-md">
+            {hoveredSpecies && hoveredProfile && (
+              <div
+                role="tooltip"
+                className="pointer-events-none absolute inset-x-0 bottom-full z-40 mb-2 rounded-xl border border-amber-600/80 bg-slate-950/95 px-3 py-2 shadow-2xl shadow-amber-950/40 backdrop-blur-md"
+              >
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  {renderPetIcon(hoveredSpecies, 'h-5 w-5')}
+                  <span className="text-xs font-black text-amber-100">
+                    {hoveredSpeciesMeta?.name ?? hoveredSpecies}
+                  </span>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    {PET_ROLE_LABEL[hoveredProfile.role as PetRole]} ·{' '}
+                    {PET_DELIVERY_LABEL[hoveredProfile.delivery as PetDelivery]}
+                  </span>
+                  <span className="ml-auto text-[9px] font-semibold text-slate-400">
+                    Aplica: {describePetStatuses(hoveredSpecies)}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] leading-snug text-slate-200">
+                  {hoveredGuide?.attack ??
+                    'Esta espécie ainda não tem descrição de ataque registrada.'}
+                </p>
+                <p className="mt-1 text-[10px] font-black leading-snug text-amber-300">
+                  {formatPetSynergySentence(hoveredSpecies)}
+                </p>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-2 px-0.5">
               <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-200">
                 <PawPrint className="h-3 w-3 text-amber-300" />
@@ -331,7 +366,10 @@ export const HUD: React.FC<HUDProps> = ({
                 </span>
                 <button
                   type="button"
-                  onClick={() => setDomaOpen(false)}
+                  onClick={() => {
+                    setHoveredSpecies(null);
+                    setDomaOpen(false);
+                  }}
                   title="Recolher a doma para o lado do minimapa"
                   aria-label="Recolher painel de doma"
                   className="flex h-4 w-5 cursor-pointer items-center justify-center rounded border border-amber-700/70 bg-slate-900 text-amber-200 transition hover:border-amber-400 hover:text-amber-100 active:scale-95"
@@ -351,6 +389,10 @@ export const HUD: React.FC<HUDProps> = ({
                   key={species.type}
                   type="button"
                   onClick={() => onToggleTameSpecies(species.type)}
+                  onMouseEnter={() => setHoveredSpecies(species.type)}
+                  onMouseLeave={() => setHoveredSpecies(null)}
+                  onFocus={() => setHoveredSpecies(species.type)}
+                  onBlur={() => setHoveredSpecies(null)}
                   aria-pressed={species.unlocked}
                   aria-label={`${species.name}: ${species.unlocked ? 'liberada' : 'bloqueada'} para doma. Clique para ${species.unlocked ? 'bloquear' : 'liberar'}.`}
                   title={`${species.name} — ${species.unlocked
