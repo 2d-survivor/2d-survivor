@@ -61,7 +61,7 @@ import { WEAPON_REGISTRY, PASSIVE_REGISTRY, AMAZON_STARTING_WEAPON_BY_CHARACTER 
 import { PET_UPGRADE_REGISTRY, PET_UPGRADE_IDS } from '../data/petUpgrades';
 import { TAMEABLE_SPECIES } from '../data/doma';
 import { ZARABATANA_STATS } from '../data/zarabatana';
-import { saveGameData, loadSavedData } from '../data/persistence';
+import { saveGameData, loadSavedData, getRunRecordKey } from '../data/persistence';
 import { getDifficulty } from '../data/difficulties';
 import { applyRunToMissions } from '../data/missions';
 
@@ -726,10 +726,14 @@ export class GameEngine {
     this.ctx = context;
 
     this.callbacks = callbacks;
+    // Per-hero, per-difficulty records; old saves only have the global one, so
+    // it is used as the first baseline and then replaced by specific bests.
+    const scopedRecord = savedData.records?.[getRunRecordKey(character.id, difficultyId)];
+    const baseline = scopedRecord ?? savedData.highScore;
     this.sessionRecord = {
-      timeSurvived: Math.max(0, Math.floor(savedData.highScore?.timeSurvived ?? 0)),
-      kills: Math.max(0, Math.floor(savedData.highScore?.kills ?? 0)),
-      highestLevel: Math.max(0, Math.floor(savedData.highScore?.highestLevel ?? 0)),
+      timeSurvived: Math.max(0, Math.floor(baseline?.timeSurvived ?? 0)),
+      kills: Math.max(0, Math.floor(baseline?.kills ?? 0)),
+      highestLevel: Math.max(0, Math.floor(baseline?.highestLevel ?? 0)),
     };
     this.camera = new Camera(canvas.width, canvas.height);
     this.input = new InputManager();
@@ -1132,6 +1136,19 @@ export class GameEngine {
     return this.player.level >= defs[slot - 1].unlockLevel;
   }
 
+  /**
+   * Hero specials grow with the run: +6% damage per level after the first and
+   * up to 30% shorter cooldowns, so late-game casts keep pace with weapon DPS.
+   */
+  private heroSpecialPower(): number {
+    return 1 + Math.max(0, this.player.level - 1) * 0.06;
+  }
+
+  private heroSpecialCooldown(def: { cooldown: number }): number {
+    const reduction = Math.min(0.3, Math.max(0, this.player.level - 1) * 0.01);
+    return Math.max(5, def.cooldown * (1 - reduction));
+  }
+
   private heroSpecialActive(slot: number): boolean {
     const id = this.player.character.id;
     if (id === 'dukarai') {
@@ -1164,7 +1181,7 @@ export class GameEngine {
     if (!defs || slot < 1 || slot > 3) return;
     if (!this.heroSpecialUnlocked(slot)) return;
     if (this.heroSpecialCooldowns[slot - 1] > 0) return;
-    this.heroSpecialCooldowns[slot - 1] = defs[slot - 1].cooldown;
+    this.heroSpecialCooldowns[slot - 1] = this.heroSpecialCooldown(defs[slot - 1]);
 
     if (id === 'dukarai') {
       if (slot === 1) {
@@ -1306,7 +1323,7 @@ export class GameEngine {
           if (dist > range || dist < 1) continue;
           if ((dx * fx + dy * fy) / dist < minDot) continue;
           const dealt = enemy.computeDamageTaken(
-            Math.max(1, Math.round(38 * this.player.might)),
+            Math.max(1, Math.round(38 * this.player.might * this.heroSpecialPower())),
             this.player.debuffDamageBonus
           );
           const dead = enemy.takeDamage(dealt, dx / dist, dy / dist, 340);
@@ -1373,7 +1390,7 @@ export class GameEngine {
     rawDamage: number,
     options: { knock?: number; stun?: number; color?: string; pull?: boolean } = {}
   ): void {
-    const damage = Math.max(1, Math.round(rawDamage * this.player.might));
+    const damage = Math.max(1, Math.round(rawDamage * this.player.might * this.heroSpecialPower()));
     const targets = this.enemies.slice();
     for (const enemy of targets) {
       if (enemy.hp <= 0 || enemy.isSubmerged || this.enemies.indexOf(enemy) < 0) continue;
@@ -1423,7 +1440,10 @@ export class GameEngine {
       if (!best) break;
       if (i > 0 && bestDistance > 620 * 620) break;
       hit.add(best);
-      const damage = Math.max(1, Math.round((baseDamage + growth * i) * this.player.might));
+      const damage = Math.max(
+        1,
+        Math.round((baseDamage + growth * i) * this.player.might * this.heroSpecialPower())
+      );
       const dx = best.x - fromX;
       const dy = best.y - fromY;
       const dist = Math.max(1, Math.hypot(dx, dy));
@@ -4845,6 +4865,17 @@ export class GameEngine {
     data.highScore.highestLevel = Math.max(data.highScore.highestLevel, this.player.level);
     if (won) data.highScore.wins += 1;
 
+    const recordKey = getRunRecordKey(this.player.character.id, this.difficulty.id);
+    const records = { ...(data.records ?? {}) };
+    const previous = records[recordKey];
+    records[recordKey] = {
+      timeSurvived: Math.max(previous?.timeSurvived ?? 0, Math.floor(this.waveDirector.survivalTime)),
+      kills: Math.max(previous?.kills ?? 0, this.kills),
+      highestLevel: Math.max(previous?.highestLevel ?? 0, this.player.level),
+      wins: (previous?.wins ?? 0) + (won ? 1 : 0),
+    };
+    data.records = records;
+
     const current = {
       kills: this.kills,
       survivalSeconds: Math.floor(this.waveDirector.survivalTime),
@@ -5002,12 +5033,13 @@ export class GameEngine {
                 description: definition.description,
                 icon: definition.icon,
                 cooldown: this.heroSpecialCooldowns[index],
-                cooldownMax: definition.cooldown,
+                cooldownMax: this.heroSpecialCooldown(definition),
                 unlocked,
                 active: unlocked && this.heroSpecialActive(slot),
                 unlockHint: unlocked
                   ? undefined
                   : `Libera no nível ${definition.unlockLevel}`,
+                powerPct: Math.round(this.heroSpecialPower() * 100),
               };
             })
           : [];

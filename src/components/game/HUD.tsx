@@ -658,9 +658,16 @@ export const HUD: React.FC<HUDProps> = ({
                         <span className="font-black text-amber-300">
                           {isFury
                             ? `${slot.cost ?? slot.cooldownMax} de Fúria`
-                            : `${slot.cooldownMax}s`}
+                            : `${Math.round(slot.cooldownMax)}s`}
                         </span>
                       </div>
+
+                      {slot.powerPct !== undefined && (
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-400">Poder atual:</span>
+                          <span className="font-black text-emerald-300">{slot.powerPct}%</span>
+                        </div>
+                      )}
 
                       {/* State in Combat (when unlocked) */}
                       {slot.unlocked && (

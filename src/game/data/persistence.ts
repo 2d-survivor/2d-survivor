@@ -1,4 +1,4 @@
-import { PermanentPowerUp, SavedGameData } from '../types';
+import { PermanentPowerUp, RunRecord, SavedGameData } from '../types';
 import { DEFAULT_DIFFICULTY, DIFFICULTIES } from './difficulties';
 import { normalizeInventories } from './inventory';
 import { createInitialMissionState, normalizeMissionState } from './missions';
@@ -62,6 +62,29 @@ export const POWER_UP_DEFINITIONS: PermanentPowerUp[] = [
 
 const STORAGE_KEY = 'vampire_survivors_2d_save';
 
+/** Key used by the per-hero, per-difficulty record table. */
+export function getRunRecordKey(characterId: string, difficultyId: string): string {
+  return `${characterId}:${difficultyId}`;
+}
+
+function normalizeRecords(raw: unknown): Record<string, RunRecord> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const records: Record<string, RunRecord> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object') continue;
+    const entry = value as Record<string, unknown>;
+    const num = (input: unknown) =>
+      typeof input === 'number' && Number.isFinite(input) ? Math.max(0, Math.floor(input)) : 0;
+    records[key] = {
+      timeSurvived: num(entry.timeSurvived),
+      kills: num(entry.kills),
+      highestLevel: num(entry.highestLevel),
+      wins: num(entry.wins),
+    };
+  }
+  return records;
+}
+
 export function getInitialSave(): SavedGameData {
   return {
     inventories: {},
@@ -75,6 +98,7 @@ export function getInitialSave(): SavedGameData {
       highestLevel: 0,
       wins: 0,
     },
+    records: {},
     missions: createInitialMissionState(),
   };
 }
@@ -112,6 +136,7 @@ export function loadSavedData(): SavedGameData {
         highestLevel: highScore.highestLevel ?? 0,
         wins: highScore.wins ?? 0,
       },
+      records: normalizeRecords(parsed.records),
       missions: normalizeMissionState(parsed.missions),
     };
   } catch {

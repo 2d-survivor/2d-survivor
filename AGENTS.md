@@ -24,7 +24,7 @@ npm run bot:dev      # bot + worker together
 npm run bot:deploy   # register Discord slash commands
 ```
 
-- There is no test suite and no CI. Verify with `npx tsc --noEmit`, `npm run build`, and `npm run lint`; all pass on a clean `master`.
+- There is no test suite. CI (`.github/workflows/ci.yml`) runs `npx tsc --noEmit`, `npm run lint`, `npm run build` and the bot typecheck on push to `master` and on PRs. Locally, verify with those same commands; all pass on a clean `master`.
 - Lint one file with `npx eslint src/path/file.tsx`. Do not assume `npm test` or a root `npm run typecheck` exists.
 - The root `README.md` is mostly create-next-app boilerplate (it references a nonexistent `app/page.tsx`); `bot/README.md` is the detailed, current bot doc.
 

@@ -263,6 +263,13 @@ export type CompanionId = 'frog' | 'turtle' | 'butterfly';
 export type ForestMissionStatus = 'available' | 'accepted' | 'ready' | 'delivered' | 'expired';
 export interface CharacterInventory { unlockedCompanions?: CompanionId[]; equippedCompanions?: CompanionId[]; items: EquipmentItem[]; equipped: Partial<Record<EquipmentSlot, string>>; kopenawaDefeated?: boolean; hunterQuest?: HunterQuestProgress; }
 
+export interface RunRecord {
+  timeSurvived: number;
+  kills: number;
+  highestLevel: number;
+  wins: number;
+}
+
 export interface SavedGameData {
   inventories: Record<string, CharacterInventory>;
   gold: number;
@@ -275,6 +282,8 @@ export interface SavedGameData {
     highestLevel: number;
     wins: number;
   };
+  /** Personal bests per `characterId:difficultyId`. Older saves have none. */
+  records?: Record<string, RunRecord>;
   missions: MissionSaveState;
 }
 
@@ -387,6 +396,8 @@ export interface SpecialAbilityHUD {
   cost?: number;
   /** Short text shown while the slot is locked (e.g. "3/10 espécies"). */
   unlockHint?: string;
+  /** Hero specials: current damage multiplier in percent, shown in the tooltip. */
+  powerPct?: number;
 }
 
 /** Domador de Feras pack energy, charged by kills and taming. */
