@@ -651,7 +651,7 @@ export const HUD: React.FC<HUDProps> = ({
           <div
             className={`absolute right-[12.5rem] z-10 flex flex-col items-end gap-1 max-sm:right-2 max-sm:bottom-16 ${petBarOffset}`}
           >
-            <div className="pointer-events-auto flex items-end gap-2 rounded-xl border border-amber-700/60 bg-slate-950/85 px-2.5 py-2 shadow-2xl backdrop-blur-md">
+            <div className="pointer-events-auto flex max-w-[calc(100vw-14rem)] items-end gap-1.5 overflow-x-auto rounded-xl border border-amber-700/60 bg-slate-950/85 px-2.5 py-2 shadow-2xl backdrop-blur-md max-sm:max-w-[calc(100vw-1rem)] sm:gap-2">
               {hud.pets.map((pet, index) => {
                 const petHpPercent = Math.max(0, Math.min(100, (pet.hp / Math.max(1, pet.maxHp)) * 100));
                 const evolutionProgress =

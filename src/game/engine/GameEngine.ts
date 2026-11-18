@@ -2693,7 +2693,7 @@ export class GameEngine {
     return this.player.character.id === 'domador_feras';
   }
 
-  /** Pack size grows from 2 to 5 with three Chamado da Matilha levels. */
+  /** Pack size grows from 2 to 8 with six Chamado da Matilha levels. */
   private get petMaxSlots(): number {
     return 2 + this.petUpgradeLevels.chamado_matilha;
   }

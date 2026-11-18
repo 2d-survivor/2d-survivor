@@ -294,7 +294,7 @@ const DomadorInfo: React.FC = () => (
         <p>
           A matilha começa com <strong>2 vagas</strong>. Cada nível de{' '}
           <strong>Chamado da Matilha</strong> adiciona <strong>+1 vaga</strong>, até o máximo de{' '}
-          <strong>5 bichos</strong>.
+          <strong>8 bichos</strong>.
         </p>
         <p className="mt-1.5 text-[#9ca3af]">
           Com a matilha cheia, novos abates não domam. Durante o Chamado dos Ancestrais, esses abates

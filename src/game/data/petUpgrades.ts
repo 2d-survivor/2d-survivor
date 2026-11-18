@@ -9,7 +9,7 @@ export interface PetUpgradeDefinition {
   levelDescriptions: string[];
 }
 
-const MATILHA_MAX_PETS = 5;
+const MATILHA_MAX_PETS = 8;
 const BASE_MAX_PETS = 2;
 const MATILHA_PETS_PER_LEVEL = 1;
 const BASE_AURA_RADIUS = 280;
@@ -24,8 +24,8 @@ export const PET_UPGRADE_REGISTRY: Record<PetUpgradeId, PetUpgradeDefinition> = 
     id: 'chamado_matilha',
     name: 'Chamado da Matilha',
     iconName: 'Users',
-    maxLevel: 3,
-    levelDescriptions: [1, 2, 3].map((level) => {
+    maxLevel: 6,
+    levelDescriptions: [1, 2, 3, 4, 5, 6].map((level) => {
       const before = BASE_MAX_PETS + (level - 1) * MATILHA_PETS_PER_LEVEL;
       const after = Math.min(MATILHA_MAX_PETS, before + MATILHA_PETS_PER_LEVEL);
       return `Aumenta o limite de pets ativos de ${before} para ${after}.`;
