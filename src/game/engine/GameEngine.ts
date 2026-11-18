@@ -1172,7 +1172,7 @@ export class GameEngine {
         !e.isWaterDweller &&
         !e.isRiverPredator &&
         e.type !== 'bat';
-      if (e.type === 'sucuri') {
+      if (e.type === 'sucuri' || e.type === 'elite_black_caiman') {
         e.terrainSpeedMultiplier = enemyInWater
           ? SUCURI_WATER_SPEED_MULTIPLIER
           : enemyInMud || this.worldProps.isRiverBankTerrain(e.x, e.y, e.radius)

@@ -231,8 +231,9 @@ const FAUNA: FaunaEntry[] = [
     type: 'elite_black_caiman',
     name: 'Jacaré-açu',
     rank: 'Elite',
-    habitat: 'Água',
-    behavior: 'Foge em terra; ataca com +50% de velocidade na água (+30% na praia) e cresce sem limite ao caçar, como a Sucuri.',
+    habitat: 'Terra e Água',
+    behavior:
+      'Predador anfíbio de elite; ataca com +50% de velocidade na água (+30% na praia) e cresce sem limite ao caçar presas pela floresta ou pelo rio.',
     nightFrenzy: true,
   },
   {

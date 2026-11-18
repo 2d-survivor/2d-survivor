@@ -38,6 +38,7 @@ const AMAZON_ELITE_ENEMIES: EnemyType[] = [
   'elite_jaguar',
   'elite_tapir',
   'elite_goliath_spider',
+  'elite_black_caiman',
 ];
 
 // Aquatic Amazon Forest fauna. These are only ever spawned on top of real
@@ -82,7 +83,7 @@ export class WaveDirector {
   private amazonBossWave: number = 0;
   // The adult Jacaré-açu and its hatchling are tracked on independent timers
   // so the baby mechanic can never starve the adult out of the spawn rotation.
-  private nextAmazonCaimanTime: number = 95 + Math.random() * 55;
+  private nextAmazonCaimanTime: number = 45 + Math.random() * 30;
   private nextAmazonBabyCaimanTime: number = 35 + Math.random() * 25;
   private initialCaimanSpawned: boolean = false;
 
@@ -171,18 +172,26 @@ export class WaveDirector {
       }
 
       if (this.survivalTime >= this.nextAmazonCaimanTime && enemies.length < maxEnemies) {
-        this.nextAmazonCaimanTime = this.survivalTime + 95 + Math.random() * 55;
-        const pos = this.getWaterSpawnPosition(camera, 44);
-        if (pos) {
-          const adult = this.createEnemy(
-            'elite_black_caiman',
-            pos.x,
-            pos.y,
-            hpMultiplier * 1.05
-          );
-          this.triggerAlert(`⚠️ ${adult.name.toUpperCase()} SURGIU NO RIO!`, 4.5);
-          onSpawn(adult);
-        }
+        this.nextAmazonCaimanTime = this.survivalTime + 50 + Math.random() * 35;
+        const waterPos = this.getWaterSpawnPosition(camera, 44);
+        const pos =
+          waterPos ??
+          (this.worldProps && Math.random() < 0.4
+            ? this.worldProps.getNearestRiverPoint(camera.x)
+            : this.getSpawnPositionOutsideScreen(camera));
+        const adult = this.createEnemy(
+          'elite_black_caiman',
+          pos.x,
+          pos.y,
+          hpMultiplier * 1.05
+        );
+        this.triggerAlert(
+          waterPos
+            ? `⚠️ ${adult.name.toUpperCase()} SURGIU NO RIO!`
+            : `⚠️ ${adult.name.toUpperCase()} SURGIU NA FLORESTA!`,
+          4.5
+        );
+        onSpawn(adult);
       }
 
       if (this.survivalTime >= this.nextAmazonBabyCaimanTime && enemies.length < maxEnemies) {
@@ -548,6 +557,7 @@ export class WaveDirector {
       'elite_jaguar',
       'elite_tapir',
       'elite_goliath_spider',
+      'elite_black_caiman',
     ];
     const count = Math.max(2, Math.round(3 * this.difficulty.enemyCount));
     for (let i = 0; i < count; i++) {

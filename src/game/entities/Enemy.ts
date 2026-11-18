@@ -431,7 +431,7 @@ export class Enemy {
         this.xpValue = 280;
         this.isElite = true;
         this.knockbackResistance = 0.15;
-        this.isAquatic = true;
+        this.isAquatic = false;
         this.skillCooldown = 4.5 + Math.random() * 1.5;
         break;
       // The baby Caiman is a separate, weaker identity so the adult Jacaré-açu
@@ -617,13 +617,12 @@ export class Enemy {
   }
 
   /**
-   * The Jacaré-açu and the Cobra-Grande (Boiúna) boss are tied to the river:
+   * The baby Jacaré-açu and the Cobra-Grande (Boiúna) boss are tied to the river:
    * they flee on dry forest ground, attack in the water and never leave the
-   * river and its beach. The regular Sucuri is not restricted this way.
+   * river and its beach. The adult Jacaré-açu and Sucuri roam freely on both.
    */
   public get isRiverPredator(): boolean {
     return (
-      this.type === 'elite_black_caiman' ||
       this.type === 'baby_black_caiman' ||
       this.type === 'boss_cobra_grande'
     );
@@ -641,12 +640,13 @@ export class Enemy {
   /**
    * Native water creatures (aquatic fauna and the river bosses) already swim
    * at their natural level, so the river must not visually cut their sprites.
-   * The Sucuri is amphibious and also swims freely.
+   * The Sucuri and Jacaré-açu are amphibious and also swim freely.
    */
   public get isWaterDweller(): boolean {
     return (
       this.isAquatic ||
       this.type === 'sucuri' ||
+      this.type === 'elite_black_caiman' ||
       this.type === 'boss_boto' ||
       this.type === 'boss_iara' ||
       this.type === 'boss_vitoria_regia' ||
