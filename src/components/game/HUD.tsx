@@ -80,6 +80,7 @@ export const HUD: React.FC<HUDProps> = ({
   const hasTameBar = !!tameSpecies && tameSpecies.length > 0;
   const [domaOpen, setDomaOpen] = React.useState(true);
   const [hoveredSpecies, setHoveredSpecies] = React.useState<EnemyType | null>(null);
+  const [hoveredSpecial, setHoveredSpecial] = React.useState<number | 'fury' | null>(null);
   const domaExpanded = hasTameBar && domaOpen;
   const unlockedSpeciesCount = tameSpecies ? tameSpecies.filter((species) => species.unlocked).length : 0;
   const petSlots = hud.petSlots ?? hud.pets?.length ?? 0;
@@ -416,11 +417,17 @@ export const HUD: React.FC<HUDProps> = ({
           </button>
         )}
         {/* Special abilities: vertical stack beside the minimap (left edge). */}
-        <div className="pointer-events-auto absolute bottom-[5.5rem] left-[20.5rem] z-10 flex flex-col gap-2 max-sm:bottom-[4.5rem] max-sm:left-[15.5rem]">
+        <div className="pointer-events-auto absolute bottom-[5.5rem] left-[20.5rem] z-40 flex flex-col gap-2 max-sm:bottom-[4.5rem] max-sm:left-[15.5rem]">
           {specialEnergy && (
             <div
-              title={`${specialEnergy.label}: ${specialEnergy.value}/${specialEnergy.max}`}
-              className="flex h-14 w-16 flex-col items-center justify-center gap-0.5 rounded-lg border-2 border-amber-600/70 bg-slate-950/85 px-1 py-1 shadow-lg backdrop-blur-sm"
+              onMouseEnter={() => setHoveredSpecial('fury')}
+              onMouseLeave={() => setHoveredSpecial(null)}
+              onFocus={() => setHoveredSpecial('fury')}
+              onBlur={() => setHoveredSpecial(null)}
+              tabIndex={0}
+              role="region"
+              aria-label={`${specialEnergy.label}: ${specialEnergy.value} de ${specialEnergy.max}`}
+              className="relative flex h-14 w-16 cursor-help flex-col items-center justify-center gap-0.5 rounded-lg border-2 border-amber-600/70 bg-slate-950/85 px-1 py-1 shadow-lg backdrop-blur-sm transition hover:border-amber-400"
             >
               <span className="text-[7px] font-black uppercase tracking-wide text-amber-300">
                 Fúria
@@ -435,6 +442,36 @@ export const HUD: React.FC<HUDProps> = ({
                   style={{ width: `${specialEnergyPct}%` }}
                 />
               </span>
+
+              {/* Fúria Tooltip Card */}
+              {hoveredSpecial === 'fury' && (
+                <div
+                  role="tooltip"
+                  className="pointer-events-none absolute left-full top-0 z-50 ml-3 w-80 rounded-xl border border-amber-500/80 bg-slate-950/95 p-3.5 shadow-2xl shadow-black/90 backdrop-blur-md"
+                >
+                  <div className="flex items-center justify-between border-b border-amber-900/60 pb-2">
+                    <span className="flex items-center gap-1.5 text-xs font-black text-amber-100">
+                      <span className="text-base leading-none">🔥</span>
+                      {specialEnergy.label}
+                    </span>
+                    <span className="rounded border border-amber-700/60 bg-amber-950/80 px-1.5 py-0.5 text-[9px] font-black uppercase text-amber-300">
+                      Recurso
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-slate-200">
+                    Energia de combate primordial da matilha. É acumulada continuamente ao derrotar inimigos e domar novas espécies da fauna amazônica.
+                  </p>
+                  <div className="mt-2.5 flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/80 px-2.5 py-1.5">
+                    <span className="text-[10px] font-bold text-slate-400">Fúria Atual</span>
+                    <span className="text-xs font-black text-amber-300">
+                      {specialEnergy.value} <span className="text-[10px] font-semibold text-slate-500">/ {specialEnergy.max}</span>
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[10px] font-bold text-amber-300/90 leading-tight">
+                    💡 Combustível para conjurar os especiais 1, 2 e 3 do Domador de Feras.
+                  </p>
+                </div>
+              )}
             </div>
           )}
           {specialSlots.map((slot, index) => {
@@ -443,14 +480,25 @@ export const HUD: React.FC<HUDProps> = ({
             const ready = slot.unlocked && cooldown <= 0;
             const progress = slot.unlocked ? Math.max(0, Math.min(1, 1 - cooldown / cooldownMax)) : 0;
             const isFury = slot.resource === 'fury';
+            const isHovered = hoveredSpecial === index;
+            const tooltipPosClass =
+              index === specialSlots.length - 1
+                ? 'bottom-0'
+                : index === 0
+                  ? 'top-0'
+                  : 'top-1/2 -translate-y-1/2';
 
             return (
               <div
                 key={slot.key || index + 1}
-                title={slot.unlocked
-                  ? `${slot.name ?? 'Especial'}${slot.description ? ` — ${slot.description}` : ''}`
-                  : slot.unlockHint ?? 'Slot bloqueado'}
-                className={`relative flex h-14 w-16 flex-col items-center justify-center rounded-lg border-2 bg-slate-950/85 shadow-lg backdrop-blur-sm ${slot.unlocked
+                onMouseEnter={() => setHoveredSpecial(index)}
+                onMouseLeave={() => setHoveredSpecial(null)}
+                onFocus={() => setHoveredSpecial(index)}
+                onBlur={() => setHoveredSpecial(null)}
+                tabIndex={0}
+                role="region"
+                aria-label={`${slot.name ?? `Especial ${slot.key || index + 1}`}: ${slot.unlocked ? (ready ? 'Pronto' : 'Em recarga') : 'Bloqueado'}`}
+                className={`relative flex h-14 w-16 cursor-help flex-col items-center justify-center rounded-lg border-2 bg-slate-950/85 shadow-lg backdrop-blur-sm transition ${slot.unlocked
                   ? slot.active
                     ? 'border-emerald-400 shadow-emerald-500/40'
                     : ready
@@ -496,6 +544,102 @@ export const HUD: React.FC<HUDProps> = ({
                       {slot.unlockHint ?? 'Bloqueado'}
                     </span>
                   </>
+                )}
+
+                {/* Special Ability Floating Tooltip Card */}
+                {isHovered && (
+                  <div
+                    role="tooltip"
+                    className={`pointer-events-none absolute left-full ${tooltipPosClass} z-50 ml-3 w-80 rounded-xl border border-amber-600/80 bg-slate-950/95 p-3.5 shadow-2xl shadow-black/90 backdrop-blur-md`}
+                  >
+                    {/* Header: Icon, Name, Key Badge */}
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-base leading-none">
+                          {slot.unlocked ? (slot.icon ?? (slot.key === '1' ? '☕' : slot.key === '2' ? '🧀' : '🏍️')) : '🔒'}
+                        </span>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-black leading-tight text-amber-100">
+                            {slot.name ?? `Especial ${slot.key || index + 1}`}
+                          </h4>
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                            Atalho: Tecla {slot.key || index + 1}
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide border ${
+                          !slot.unlocked
+                            ? 'border-slate-700 bg-slate-900 text-slate-400'
+                            : slot.active
+                              ? 'border-emerald-500 bg-emerald-950/80 text-emerald-300'
+                              : ready
+                                ? 'border-emerald-500 bg-emerald-950/80 text-emerald-300'
+                                : 'border-amber-700 bg-amber-950/80 text-amber-300'
+                        }`}
+                      >
+                        {!slot.unlocked
+                          ? 'Bloqueado'
+                          : slot.active
+                            ? 'Ativo'
+                            : ready
+                              ? 'Pronto'
+                              : isFury
+                                ? 'Sem Fúria'
+                                : 'Recarregando'}
+                      </span>
+                    </div>
+
+                    {/* Detailed Combat Description */}
+                    <p className="mt-2 text-[11px] leading-relaxed text-slate-200">
+                      {slot.description ?? (slot.unlocked
+                        ? 'Habilidade especial de combate.'
+                        : 'Habilidade especial bloqueada. Atenda aos requisitos para liberar seu poder.')}
+                    </p>
+
+                    {/* Metrics: Cooldown/Cost & Status */}
+                    <div className="mt-2.5 flex flex-col gap-1.5 rounded-lg border border-slate-800/80 bg-slate-900/70 p-2 text-[10px]">
+                      {/* Cooldown or Resource Cost */}
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-400">
+                          {isFury ? 'Custo de Ativação:' : 'Tempo de Recarga:'}
+                        </span>
+                        <span className="font-black text-amber-300">
+                          {isFury
+                            ? `${slot.cost ?? slot.cooldownMax} de Fúria`
+                            : `${slot.cooldownMax}s`}
+                        </span>
+                      </div>
+
+                      {/* State in Combat (when unlocked) */}
+                      {slot.unlocked && (
+                        <div className="flex items-center justify-between border-t border-slate-800/60 pt-1">
+                          <span className="font-bold text-slate-400">Estado Atual:</span>
+                          <span className="font-semibold text-slate-200">
+                            {slot.active ? (
+                              <span className="text-emerald-300 font-bold">Em efeito no combate</span>
+                            ) : ready ? (
+                              <span className="text-emerald-300 font-bold">Pronto para ativação</span>
+                            ) : isFury ? (
+                              <span className="text-amber-300">Faltam {Math.ceil(cooldown)} de Fúria</span>
+                            ) : (
+                              <span className="text-amber-300">Faltam {Math.ceil(cooldown)}s ({Math.round(progress * 100)}%)</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Unlock Requirement (when locked) */}
+                      {!slot.unlocked && (
+                        <div className="border-t border-slate-800/60 pt-1">
+                          <span className="font-bold text-slate-400 block mb-0.5">Requisito para Desbloquear:</span>
+                          <span className="font-black text-amber-300 leading-snug block">
+                            {slot.unlockHint ?? 'Suba de nível ou cumpra objetivos da floresta.'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             );
