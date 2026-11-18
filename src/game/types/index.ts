@@ -142,8 +142,10 @@ export interface CharacterConfig {
   /** Lula: eight jump poses on row 0 and eight dash poses on row 1. */
   movementSprite?: string;
   attackSprite?: string;
+  jumpSprite?: string;
   walkFrames?: number;
   attackFrames?: number;
+  jumpFrames?: number;
   statBonuses: {
     maxHp?: number;
     speed?: number;

@@ -168,6 +168,7 @@ export class Player {
   private spriteImage: HTMLImageElement | null = null;
   private walkSpriteImage: HTMLImageElement | null = null;
   private attackSpriteImage: HTMLImageElement | null = null;
+  private jumpSpriteImage: HTMLImageElement | null = null;
   private animationSpriteImage: HTMLImageElement | null = null;
   private movementSpriteImage: HTMLImageElement | null = null;
   private attackFacingX: number = 1;
@@ -219,6 +220,11 @@ export class Player {
     if (character.attackSprite && typeof window !== 'undefined') {
       this.attackSpriteImage = new Image();
       this.attackSpriteImage.src = character.attackSprite;
+    }
+
+    if (character.jumpSprite && typeof window !== 'undefined') {
+      this.jumpSpriteImage = new Image();
+      this.jumpSpriteImage.src = character.jumpSprite;
     }
 
     // Apply character base modifiers
@@ -801,11 +807,17 @@ export class Player {
 
     const walkSheet = this.walkSpriteImage;
     const attackSheet = this.attackSpriteImage;
+    const jumpSheet = this.jumpSpriteImage;
     const hasWalkSheet = !!walkSheet && walkSheet.complete && walkSheet.naturalWidth > 0;
     const hasAttackSheet =
       !!attackSheet && attackSheet.complete && attackSheet.naturalWidth > 0;
+    const hasJumpSheet =
+      !!jumpSheet && jumpSheet.complete && jumpSheet.naturalWidth > 0;
     const isDead = this.hp <= 0;
     const isAttacking = !isDead && this.attackAnimTimer > 0 && hasAttackSheet;
+    const isJumping = !isDead && this.isJumping;
+    const isDashing = !isDead && this.dashTimer > 0;
+    const isJumpingOrDashing = (isJumping || isDashing) && hasJumpSheet;
     const isUsingSheet = hasWalkSheet;
     const animationSheet = this.animationSpriteImage;
     const hasAnimationSheet = !!animationSheet && animationSheet.complete
@@ -851,10 +863,38 @@ export class Player {
         );
         const spriteWidth = spriteHeight * (frameWidth / frameHeight);
 
+        const attackFlip = this.attackFacingX < 0 ? -1 : 1;
+        ctx.save();
+        if (attackFlip < 0) ctx.scale(-1, 1);
+        ctx.drawImage(
+          attackSheet,
+          frame * frameWidth,
+          0,
+          frameWidth,
+          frameHeight,
+          -spriteWidth / 2,
+          14 - spriteHeight,
+          spriteWidth,
+          spriteHeight
+        );
+        ctx.restore();
+      } else if (isJumpingOrDashing && jumpSheet) {
+        const jumpFrames = Math.max(1, this.character.jumpFrames ?? 6);
+        const frameWidth = jumpSheet.naturalWidth / jumpFrames;
+        const frameHeight = jumpSheet.naturalHeight;
+        const progress = isJumping
+          ? 1 - this.jumpTimer / this.movementConfig.jumpDuration
+          : 1 - this.dashTimer / this.movementConfig.dashDuration;
+        const frame = Math.min(
+          jumpFrames - 1,
+          Math.max(0, Math.floor(progress * jumpFrames))
+        );
+        const spriteWidth = spriteHeight * (frameWidth / frameHeight);
+
         ctx.save();
         if (flip < 0) ctx.scale(-1, 1);
         ctx.drawImage(
-          attackSheet,
+          jumpSheet,
           frame * frameWidth,
           0,
           frameWidth,

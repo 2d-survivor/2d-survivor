@@ -2920,6 +2920,14 @@ export class GameEngine {
     const dx = target.x - this.player.x;
     const dy = target.y - this.player.y;
     const dist = Math.hypot(dx, dy) || 1;
+
+    // Trigger Domador attack animation synchronized with attack cadence
+    const cadence =
+      ZARABATANA_STATS.baseCooldown * Math.max(0.45, 1 - this.player.cooldownReduction);
+    const animDuration = Math.min(0.42, Math.max(0.18, cadence * 0.45));
+    const aimX = Math.abs(dx) > 0.01 ? (dx > 0 ? 1 : -1) : this.player.facingX;
+    this.player.triggerAttackAnimation(animDuration, aimX);
+
     const levelMultiplier =
       1 + Math.max(0, this.player.level - 1) * ZARABATANA_STATS.damagePerHeroLevel;
     const damage = target.computeDamageTaken(

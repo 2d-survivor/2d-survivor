@@ -110,8 +110,13 @@ export const CHARACTERS: CharacterConfig[] = [
     iconName: 'PawPrint',
     color: '#3f6212',
     portraitColor: '#1a2e05',
+    sprite: '/domador.png',
     walkSprite: '/domador-walk-spritesheet.png',
     walkFrames: 4,
+    attackSprite: '/sprites/domador-ataque.png',
+    attackFrames: 9,
+    jumpSprite: '/sprites/domador-pulo.png',
+    jumpFrames: 6,
     statBonuses: {
       maxHp: 15,
       armor: 1,
