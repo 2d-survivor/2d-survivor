@@ -83,6 +83,15 @@ export class Player {
   public debuffDamageBonus: number = 0;
   public luck: number = 0;
 
+  // Hero special buffs. They survive recalculatePlayerStats (level-ups and
+  // item changes) because the weapon system multiplies them back in.
+  public specialMightMul: number = 1;
+  public specialSpeedMul: number = 1;
+  public specialAreaMul: number = 1;
+  public specialAttackSpeedMul: number = 1;
+  public specialExtraProjectiles: number = 0;
+  public specialArmorBonus: number = 0;
+
   public pickupRadius: number = 65;
   public xpMultiplier: number = 1.0;
   public goldMultiplier: number = 1.0;

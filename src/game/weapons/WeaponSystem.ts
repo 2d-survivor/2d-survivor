@@ -609,6 +609,15 @@ export class WeaponSystem {
 
     player.cooldownReduction = Math.min(0.55, player.cooldownReduction);
     player.critChance = Math.min(0.85, player.critChance);
+
+    // Hero special buffs are applied last so passives and permanent upgrades
+    // never cancel them. The engine recalculates again when the buff expires.
+    player.might *= player.specialMightMul;
+    player.speed *= player.specialSpeedMul;
+    player.areaMultiplier *= player.specialAreaMul;
+    player.bonusAmount += player.specialExtraProjectiles;
+    player.armor += player.specialArmorBonus;
+
     player.hp = Math.min(player.hp, player.maxHp);
   }
 
@@ -937,7 +946,7 @@ export class WeaponSystem {
   ): void {
     // Buriti buff: shorter cooldowns (faster attacks) for its duration.
     const attackSpeedFactor = player.attackSpeedBoostTimer > 0 ? 0.65 : 1;
-    const cdFactor = Math.max(0.45, 1 - player.cooldownReduction) * attackSpeedFactor / (1 + (player.character.statBonuses.attackSpeed || 0) + player.lulaLevelAttackSpeedBonus);
+    const cdFactor = Math.max(0.45, 1 - player.cooldownReduction) * attackSpeedFactor / ((1 + (player.character.statBonuses.attackSpeed || 0) + player.lulaLevelAttackSpeedBonus) * player.specialAttackSpeedMul);
 
     switch (w.id) {
       case 'bottle_51': {
@@ -4253,6 +4262,11 @@ export class WeaponSystem {
     }
 
     return undefined;
+  }
+
+  /** Fusions whose components are ready, for the in-run HUD warning. */
+  public getReadyFusions(): UpgradeOption[] {
+    return this.collectFusionOptions();
   }
 
   /** Returns one card per fusion recipe whose weapon and passive are ready. */

@@ -33,6 +33,7 @@ import {
   Swords,
 } from 'lucide-react';
 import { renderPetIcon } from './PetIcon';
+import { useUiScale } from './useUiScale';
 
 interface HUDProps {
   hud: HUDState;
@@ -44,6 +45,8 @@ interface HUDProps {
   onReleasePet: (index: number) => void;
   onTogglePetStance: () => void;
   onToggleTameSpecies: (type: EnemyType) => void;
+  /** Mobile/touch and mouse casting of hero specials (slot 1-3). */
+  onSpecial: (slot: number) => void;
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -55,6 +58,7 @@ export const HUD: React.FC<HUDProps> = ({
   onReleasePet,
   onTogglePetStance,
   onToggleTameSpecies,
+  onSpecial,
 }) => {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -79,8 +83,10 @@ export const HUD: React.FC<HUDProps> = ({
   const tameSpecies = hud.tameSpecies;
   const hasTameBar = !!tameSpecies && tameSpecies.length > 0;
   const [domaOpen, setDomaOpen] = React.useState(true);
+  const [specialsOpen, setSpecialsOpen] = React.useState(true);
   const [hoveredSpecies, setHoveredSpecies] = React.useState<EnemyType | null>(null);
   const [hoveredSpecial, setHoveredSpecial] = React.useState<number | 'fury' | null>(null);
+  const { uiScale } = useUiScale();
   const domaExpanded = hasTameBar && domaOpen;
   const unlockedSpeciesCount = tameSpecies ? tameSpecies.filter((species) => species.unlocked).length : 0;
   const petSlots = hud.petSlots ?? hud.pets?.length ?? 0;
@@ -95,7 +101,10 @@ export const HUD: React.FC<HUDProps> = ({
   const attackCount = Math.min(4, hud.weapons.length + (nativeWeapon ? 1 : 0));
 
   return (
-    <div className="pointer-events-none absolute inset-0 select-none flex flex-col justify-between p-3 font-sans text-white">
+    <div
+      className="pointer-events-none absolute inset-0 select-none flex flex-col justify-between p-3 font-sans text-white"
+      style={uiScale !== 1 ? { zoom: uiScale } : undefined}
+    >
       {hud.hunterQuest?.accepted && !hud.hunterQuest.completed && (
         <div role="status" className={`absolute left-1/2 w-60 max-w-[72vw] -translate-x-1/2 rounded-xl border border-amber-600 bg-stone-950/95 px-4 py-3 text-amber-100 shadow-lg ${questPanelOffset}`}>
           <div className="flex items-center justify-between gap-3">
@@ -127,6 +136,22 @@ export const HUD: React.FC<HUDProps> = ({
           {difficultyName}
         </div>
       </div>
+
+      {/* Next scripted event countdown */}
+      {hud.nextEvent && (
+        <div className="pointer-events-none absolute left-1/2 top-[4.4rem] z-20 -translate-x-1/2 whitespace-nowrap rounded-full border border-cyan-700/70 bg-slate-950/85 px-3 py-1 text-[10px] font-bold text-cyan-100 shadow-lg backdrop-blur-sm">
+          <Clock className="mr-1 inline h-3 w-3 text-cyan-300" />
+          {hud.nextEvent.label} em{' '}
+          <span className="font-mono text-cyan-300">{formatTime(hud.nextEvent.remaining)}</span>
+        </div>
+      )}
+
+      {/* Fusion ready warning */}
+      {!!hud.fusionReady?.length && (
+        <div className="pointer-events-none absolute right-3 top-12 z-20 max-w-[15rem] animate-pulse rounded-lg border border-amber-400 bg-amber-950/90 px-2.5 py-1 text-right text-[10px] font-black leading-tight text-amber-200 shadow-lg shadow-amber-500/30 backdrop-blur-sm">
+          ⚡ Fusão pronta: {hud.fusionReady.join(' · ')}
+        </div>
+      )}
 
       {/* Top Section */}
       <div className="flex flex-col gap-2 pt-24">
@@ -417,7 +442,23 @@ export const HUD: React.FC<HUDProps> = ({
           </button>
         )}
         {/* Special abilities: vertical stack beside the minimap (left edge). */}
-        <div className="pointer-events-auto absolute bottom-[5.5rem] left-[20.5rem] z-40 flex flex-col gap-2 max-sm:bottom-[4.5rem] max-sm:left-[15.5rem]">
+        <div className="pointer-events-auto absolute bottom-[5.5rem] left-[20.5rem] z-40 flex flex-col gap-2 max-sm:bottom-24 max-sm:left-2">
+          <div className="flex items-center justify-between gap-1 rounded-md border border-slate-700/70 bg-slate-950/80 px-1.5 py-0.5">
+            <span className="text-[8px] font-black uppercase tracking-wider text-slate-300">
+              Especiais
+            </span>
+            <button
+              type="button"
+              onClick={() => setSpecialsOpen((open) => !open)}
+              title={specialsOpen ? 'Recolher painel de especiais' : 'Abrir painel de especiais'}
+              aria-label={specialsOpen ? 'Recolher painel de especiais' : 'Abrir painel de especiais'}
+              aria-expanded={specialsOpen}
+              className="flex h-4 w-5 cursor-pointer items-center justify-center rounded border border-slate-600 bg-slate-900 text-slate-200 transition hover:border-amber-400 hover:text-amber-200 active:scale-95"
+            >
+              {specialsOpen ? <Minus className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+            </button>
+          </div>
+          {specialsOpen && (<>
           {specialEnergy && (
             <div
               onMouseEnter={() => setHoveredSpecial('fury')}
@@ -491,18 +532,28 @@ export const HUD: React.FC<HUDProps> = ({
             return (
               <div
                 key={slot.key || index + 1}
+                role="button"
+                onClick={() => {
+                  if (!slot.unlocked || !ready) return;
+                  onSpecial(index + 1);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  if (!slot.unlocked || !ready) return;
+                  onSpecial(index + 1);
+                }}
                 onMouseEnter={() => setHoveredSpecial(index)}
                 onMouseLeave={() => setHoveredSpecial(null)}
                 onFocus={() => setHoveredSpecial(index)}
                 onBlur={() => setHoveredSpecial(null)}
                 tabIndex={0}
-                role="region"
                 aria-label={`${slot.name ?? `Especial ${slot.key || index + 1}`}: ${slot.unlocked ? (ready ? 'Pronto' : 'Em recarga') : 'Bloqueado'}`}
-                className={`relative flex h-14 w-16 cursor-help flex-col items-center justify-center rounded-lg border-2 bg-slate-950/85 shadow-lg backdrop-blur-sm transition ${slot.unlocked
+                className={`relative flex h-14 w-16 cursor-pointer flex-col items-center justify-center rounded-lg border-2 bg-slate-950/85 shadow-lg backdrop-blur-sm transition active:scale-95 ${slot.unlocked
                   ? slot.active
                     ? 'border-emerald-400 shadow-emerald-500/40'
                     : ready
-                      ? 'border-amber-400 shadow-amber-500/30'
+                      ? 'border-amber-400 shadow-amber-500/30 hover:border-amber-300'
                       : 'border-slate-600'
                   : 'border-slate-800 opacity-60'
                   }`}
@@ -644,6 +695,7 @@ export const HUD: React.FC<HUDProps> = ({
               </div>
             );
           })}
+          </>)}
         </div>
 
         {/* Pet bar: Domador de Feras companions (Alt + Right Click releases) */}

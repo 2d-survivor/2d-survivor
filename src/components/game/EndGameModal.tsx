@@ -122,6 +122,51 @@ export const EndGameModal: React.FC<EndGameModalProps> = ({ summary, onRestart, 
           </div>
         </div>
 
+        {/* Personal record comparison */}
+        {summary.record && (
+          <div className="mb-6 rounded-xl border border-slate-800 bg-slate-950/90 p-3">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-300">
+              <Trophy className="h-4 w-4 text-amber-400" />
+              <span>Seus recordes</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-slate-900/80 p-2">
+                <p className="text-[10px] uppercase text-slate-500">Tempo</p>
+                <p className={`font-mono text-sm font-black ${summary.record.newTime ? 'text-emerald-300' : 'text-slate-200'}`}>
+                  {formatTime(summary.survivalTime)}
+                </p>
+                <p className="text-[9px] text-slate-500">
+                  {summary.record.newTime
+                    ? `Novo recorde (era ${formatTime(summary.record.timeSurvived)})`
+                    : `Recorde ${formatTime(summary.record.timeSurvived)} · faltaram ${formatTime(Math.max(1, summary.record.timeSurvived - summary.survivalTime))}`}
+                </p>
+              </div>
+              <div className="rounded-lg bg-slate-900/80 p-2">
+                <p className="text-[10px] uppercase text-slate-500">Abates</p>
+                <p className={`font-mono text-sm font-black ${summary.record.newKills ? 'text-emerald-300' : 'text-slate-200'}`}>
+                  {summary.kills}
+                </p>
+                <p className="text-[9px] text-slate-500">
+                  {summary.record.newKills
+                    ? `Novo recorde (era ${summary.record.kills})`
+                    : `Recorde ${summary.record.kills} · faltaram ${Math.max(1, summary.record.kills - summary.kills)}`}
+                </p>
+              </div>
+              <div className="rounded-lg bg-slate-900/80 p-2">
+                <p className="text-[10px] uppercase text-slate-500">Nível</p>
+                <p className={`font-mono text-sm font-black ${summary.record.newLevel ? 'text-emerald-300' : 'text-slate-200'}`}>
+                  {summary.level}
+                </p>
+                <p className="text-[9px] text-slate-500">
+                  {summary.record.newLevel
+                    ? `Novo recorde (era ${summary.record.highestLevel})`
+                    : `Recorde ${summary.record.highestLevel} · faltaram ${Math.max(1, summary.record.highestLevel - summary.level)}`}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-3">
           {isVictory && onContinueEndless && (

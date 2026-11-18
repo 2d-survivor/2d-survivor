@@ -151,7 +151,7 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({ options, onSelect, o
               <>
                 Pressione <span className="text-amber-400 font-mono">[1]</span>,{' '}
                 <span className="text-amber-400 font-mono">[2]</span> ou{' '}
-                <span className="text-amber-400 font-mono">[3]</span> no teclado • Evoluções ocorrem nos Baús de Elite • Fusões Supremas exigem dois itens no Nível 10
+                <span className="text-amber-400 font-mono">[3]</span> no teclado • Evoluções ocorrem nos Baús de Elite • Fusão Suprema: arma Nv.10 + passiva Nv.8 • Especiais 2 e 3 liberam nos níveis 8 e 15
               </>
             )}
         </div>

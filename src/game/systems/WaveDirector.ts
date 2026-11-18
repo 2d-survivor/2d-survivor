@@ -154,6 +154,33 @@ export class WaveDirector {
     return this.mapId === 'amazon_forest';
   }
 
+  /**
+   * Next scheduled set piece (siege or boss wave) for the HUD countdown.
+   * Regular hordes are constant, so only the scripted events are announced.
+   */
+  public getNextEvent(): { label: string; remaining: number } | undefined {
+    if (!this.isAmazonForest) return undefined;
+    const candidates: { time: number; label: string }[] = [];
+    AMAZON_BOSS_WAVE_TIMES.forEach((time, index) => {
+      if (!this.triggeredEvents.has(`boss_wave_${index}`)) {
+        candidates.push({ time, label: 'Onda de chefes' });
+      }
+    });
+    for (const siege of AMAZON_SIEGES) {
+      if (!this.triggeredEvents.has(siege.key)) {
+        candidates.push({ time: siege.time, label: siege.name });
+      }
+    }
+    const next = candidates
+      .filter((event) => event.time > this.survivalTime)
+      .sort((a, b) => a.time - b.time)[0];
+    if (!next) return undefined;
+    return {
+      label: next.label,
+      remaining: Math.max(0, Math.ceil(next.time - this.survivalTime)),
+    };
+  }
+
   // Event flags to ensure one-time triggers
   public eventAlert: string | null = null;
   public eventAlertTimer: number = 0;

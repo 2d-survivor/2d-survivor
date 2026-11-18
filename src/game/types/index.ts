@@ -461,6 +461,13 @@ export interface HUDState {
   specialAbilities?: SpecialAbilityHUD[];
   /** Domador de Feras: pack fury bar shown above the special slots. */
   specialEnergy?: SpecialEnergyHUD;
+  /** Next scripted event (siege or boss wave) and its countdown in seconds. */
+  nextEvent?: {
+    label: string;
+    remaining: number;
+  };
+  /** Fusion recipes whose components are ready, for the HUD warning. */
+  fusionReady?: string[];
 }
 
 export interface GameEndSummary {
@@ -482,6 +489,15 @@ export interface GameEndSummary {
     dps: number;
     percentage: number;
   }[];
+  /** Personal bests captured before the run, plus whether this run beat them. */
+  record?: {
+    timeSurvived: number;
+    kills: number;
+    highestLevel: number;
+    newTime: boolean;
+    newKills: boolean;
+    newLevel: boolean;
+  };
 }
 
 export interface DevDebugConfig {

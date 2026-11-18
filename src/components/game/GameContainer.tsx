@@ -324,6 +324,7 @@ export const GameContainer: React.FC = () => {
           onReleasePet={(index) => engineRef.current?.releasePet(index)}
           onTogglePetStance={() => engineRef.current?.togglePetStance()}
           onToggleTameSpecies={(type) => engineRef.current?.toggleTameSpecies(type)}
+          onSpecial={(slot) => engineRef.current?.activateSpecial(slot)}
         />
       )}
 
@@ -406,6 +407,22 @@ export const GameContainer: React.FC = () => {
           bgmVolume={bgmVolume}
           onSfxVolumeChange={handleSfxVolumeChange}
           onBgmVolumeChange={handleBgmVolumeChange}
+          build={{
+            time: hud.survivalTime,
+            level: hud.level,
+            kills: hud.kills,
+            weapons: hud.weapons.map((weapon) => ({
+              id: weapon.id,
+              name: weapon.name,
+              level: weapon.level,
+              evolved: weapon.evolved,
+            })),
+            passives: hud.passives.map((passive) => ({
+              id: passive.id,
+              name: passive.name,
+              level: passive.level,
+            })),
+          }}
         />
       )}
 

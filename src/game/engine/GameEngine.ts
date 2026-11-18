@@ -275,6 +275,123 @@ const BEAST_WALL_HERO_REDUCTION = 0.2;
 const BEAST_CLONES_PER_PET = 2;
 const BEAST_CLONE_SPAWN_RADIUS = 34;
 
+interface HeroSpecialDefinition {
+  name: string;
+  description: string;
+  icon: string;
+  cooldown: number;
+  unlockLevel: number;
+}
+
+// Kits for the four heroes that used to have no special at all. Each one is a
+// timed cooldown; slots 2 and 3 open during the run at levels 8 and 15.
+const HERO_SPECIALS: Record<string, HeroSpecialDefinition[]> = {
+  dukarai: [
+    {
+      name: 'Rodízio Relâmpago',
+      description:
+        'Quatro bandejas de inox orbitam o herói por 5s, cortando e afastando quem se aproxima.',
+      icon: '🍽️',
+      cooldown: 18,
+      unlockLevel: 1,
+    },
+    {
+      name: 'Mesa Posta',
+      description:
+        'Marca 3 pontos da arena; após 1,2s eles explodem em área e atordoam a horda por 1,2s.',
+      icon: '🍲',
+      cooldown: 24,
+      unlockLevel: 8,
+    },
+    {
+      name: 'Conta Fechada',
+      description:
+        'Por 6s, as bandejas viram bumerangues: +50% de área, +2 projéteis e ondas de corte a cada 0,65s.',
+      icon: '🪃',
+      cooldown: 30,
+      unlockLevel: 15,
+    },
+  ],
+  kayrurururu: [
+    {
+      name: 'Série de Flexões',
+      description:
+        'Por 4s, ondas de choque a cada 0,65s ao redor do herói. A pose concede +8 de armadura por 6s.',
+      icon: '💪',
+      cooldown: 16,
+      unlockLevel: 1,
+    },
+    {
+      name: 'Arremesso de Anilha',
+      description:
+        'A anilha ricocheteia em até 5 inimigos, ganhando +8 de dano a cada salto.',
+      icon: '🏋️',
+      cooldown: 20,
+      unlockLevel: 8,
+    },
+    {
+      name: 'Modo Monstro',
+      description:
+        'Por 6s: +40% de dano, +30% de velocidade e +20% de cadência. O grito empurra tudo ao redor.',
+      icon: '🦍',
+      cooldown: 28,
+      unlockLevel: 15,
+    },
+  ],
+  dr_janelinha: [
+    {
+      name: 'Surto Controlado',
+      description:
+        'Contamina todos os inimigos num raio de 260 com veneno contagioso por 6s.',
+      icon: '🧪',
+      cooldown: 18,
+      unlockLevel: 1,
+    },
+    {
+      name: 'Quarentena',
+      description:
+        'Cria uma zona de quarentena por 5s que desacelera e causa dano contínuo na área.',
+      icon: '☣️',
+      cooldown: 22,
+      unlockLevel: 8,
+    },
+    {
+      name: 'Soro da Verdade',
+      description:
+        'Por 6s, cada abate cura 2% da vida máxima e inimigos próximos ficam vulneráveis (+25% de dano recebido).',
+      icon: '💉',
+      cooldown: 30,
+      unlockLevel: 15,
+    },
+  ],
+  lula: [
+    {
+      name: 'Punho do L',
+      description:
+        'Soco gigante em cone: causa dano, empurra com força e atordoa a horda por 1s.',
+      icon: '👊',
+      cooldown: 15,
+      unlockLevel: 1,
+    },
+    {
+      name: 'Dedo na Ferida',
+      description:
+        'Marca até 8 inimigos. Quando um deles morre, explode em dano em área.',
+      icon: '🎯',
+      cooldown: 20,
+      unlockLevel: 8,
+    },
+    {
+      name: 'Autoridade Máxima',
+      description:
+        'Por 6s: +1 projétil, +25% de cadência e ondas de autoridade a cada 0,65s.',
+      icon: '🖐️',
+      cooldown: 30,
+      unlockLevel: 15,
+    },
+  ],
+};
+
 export class GameEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -301,6 +418,57 @@ export class GameEngine {
   private specialPrevX = 0;
   private specialPrevY = 0;
   private specialHitEnemies = new WeakSet<Enemy>();
+
+  // Hero specials (Dukarai, Kayru, Dr. Janelinha and Lula). All timers are
+  // per-run and reset naturally with the engine instance.
+  private heroSpecialCooldowns: [number, number, number] = [0, 0, 0];
+  private heroOrbitTimer = 0;
+  private heroOrbitAngle = 0;
+  private heroOrbitTick = 0;
+  private heroBlasts: {
+    x: number;
+    y: number;
+    radius: number;
+    damage: number;
+    delay: number;
+    stun: number;
+    color: string;
+  }[] = [];
+  private heroZones: {
+    x: number;
+    y: number;
+    radius: number;
+    damage: number;
+    life: number;
+    tickTimer: number;
+    color: string;
+    slow: number;
+  }[] = [];
+  /** Repeating expanding-wave attack shared by Dukarai 3, Kayru 1 and Lula 3. */
+  private heroWaveTimer = 0;
+  private heroWaveTick = 0;
+  private heroWaveRadius = 0;
+  private heroWaveDamage = 0;
+  private heroWaveColor = '#fbbf24';
+  private heroBuffMightTimer = 0;
+  private heroBuffMightMul = 1;
+  private heroBuffSpeedTimer = 0;
+  private heroBuffSpeedMul = 1;
+  private heroBuffAreaTimer = 0;
+  private heroBuffAreaMul = 1;
+  private heroBuffAttackSpeedTimer = 0;
+  private heroBuffAttackSpeedMul = 1;
+  private heroBuffArmorTimer = 0;
+  private heroBuffArmorBonus = 0;
+  private heroBuffExtraProjectilesTimer = 0;
+  private heroBuffExtraProjectiles = 0;
+  /** Dr. Janelinha's Soro da Verdade: kills heal and nearby fauna is exposed. */
+  private heroSoroTimer = 0;
+  private heroSoroTick = 0;
+  /** Lula's Dedo na Ferida: enemies that explode when they die. */
+  private heroDetonationSet = new Set<Enemy>();
+  /** Previous personal record, captured before the run updates the save. */
+  private sessionRecord: { timeSurvived: number; kills: number; highestLevel: number };
 
   public enemies: Enemy[] = [];
   private readonly gorillaNpc: GorillaNpc | null;
@@ -558,6 +726,11 @@ export class GameEngine {
     this.ctx = context;
 
     this.callbacks = callbacks;
+    this.sessionRecord = {
+      timeSurvived: Math.max(0, Math.floor(savedData.highScore?.timeSurvived ?? 0)),
+      kills: Math.max(0, Math.floor(savedData.highScore?.kills ?? 0)),
+      highestLevel: Math.max(0, Math.floor(savedData.highScore?.highestLevel ?? 0)),
+    };
     this.camera = new Camera(canvas.width, canvas.height);
     this.input = new InputManager();
     this.sound = new SoundEngine();
@@ -760,7 +933,7 @@ export class GameEngine {
     this.animFrameId = requestAnimationFrame((time) => this.loop(time));
   }
 
-  private activateSpecial(slot: number): void {
+  public activateSpecial(slot: number): void {
     if (this.insideCave) return;
 
     if (this.isBeastmaster()) {
@@ -768,7 +941,10 @@ export class GameEngine {
       return;
     }
 
-    if (this.player.character.id !== 'derson') return;
+    if (this.player.character.id !== 'derson') {
+      this.activateHeroSpecial(slot);
+      return;
+    }
 
     if (slot === 2) {
       if (this.special2Cooldown > 0) return;
@@ -950,6 +1126,505 @@ export class GameEngine {
     }
   }
 
+  private heroSpecialUnlocked(slot: number): boolean {
+    const defs = HERO_SPECIALS[this.player.character.id];
+    if (!defs || slot < 1 || slot > defs.length) return false;
+    return this.player.level >= defs[slot - 1].unlockLevel;
+  }
+
+  private heroSpecialActive(slot: number): boolean {
+    const id = this.player.character.id;
+    if (id === 'dukarai') {
+      if (slot === 1) return this.heroOrbitTimer > 0;
+      if (slot === 2) return this.heroBlasts.length > 0;
+      return this.heroWaveTimer > 0;
+    }
+    if (id === 'kayrurururu') {
+      if (slot === 1) return this.heroWaveTimer > 0 || this.heroBuffArmorTimer > 0;
+      if (slot === 3) return this.heroBuffMightTimer > 0;
+      return false;
+    }
+    if (id === 'dr_janelinha') {
+      if (slot === 2) return this.heroZones.length > 0;
+      if (slot === 3) return this.heroSoroTimer > 0;
+      return false;
+    }
+    if (id === 'lula') {
+      if (slot === 2) return this.heroDetonationSet.size > 0;
+      if (slot === 3) return this.heroWaveTimer > 0;
+      return false;
+    }
+    return false;
+  }
+
+  /** Casts a timed hero special for Dukarai, Kayru, Dr. Janelinha or Lula. */
+  private activateHeroSpecial(slot: number): void {
+    const id = this.player.character.id;
+    const defs = HERO_SPECIALS[id];
+    if (!defs || slot < 1 || slot > 3) return;
+    if (!this.heroSpecialUnlocked(slot)) return;
+    if (this.heroSpecialCooldowns[slot - 1] > 0) return;
+    this.heroSpecialCooldowns[slot - 1] = defs[slot - 1].cooldown;
+
+    if (id === 'dukarai') {
+      if (slot === 1) {
+        // Rodízio Relâmpago: four trays orbit for five seconds.
+        this.heroOrbitTimer = 5;
+        this.heroOrbitAngle = 0;
+        this.heroOrbitTick = 0;
+        this.weaponSystem.spawnRingPulse(this.player.x, this.player.y, 120, '#fbbf24', 0.5);
+        this.vfx.addSparks(this.player.x, this.player.y, '#fbbf24', 20);
+      } else if (slot === 2) {
+        // Mesa Posta: three delayed blasts over the nearest fauna.
+        const radius = 85 * this.player.areaMultiplier;
+        const targets = this.nearestEnemies(this.player.x, this.player.y, 3, 520);
+        for (let i = 0; i < 3; i++) {
+          const target = targets[i];
+          const angle = (i * Math.PI * 2) / 3;
+          const x = target ? target.x : this.player.x + Math.cos(angle) * 140;
+          const y = target ? target.y : this.player.y + Math.sin(angle) * 140;
+          this.heroBlasts.push({
+            x,
+            y,
+            radius,
+            damage: 30,
+            delay: 1.2,
+            stun: 1.2,
+            color: '#fbbf24',
+          });
+          this.weaponSystem.spawnRingPulse(x, y, radius * 0.6, '#f59e0b', 0.5);
+          this.vfx.addSparks(x, y, '#fbbf24', 8);
+        }
+      } else {
+        // Conta Fechada: boomerang trays, wider area and extra projectiles.
+        this.heroWaveTimer = 6;
+        this.heroWaveTick = 0;
+        this.heroWaveRadius = 160 * this.player.areaMultiplier;
+        this.heroWaveDamage = 12;
+        this.heroWaveColor = '#fbbf24';
+        this.setHeroBuff('area', 1.5, 6);
+        this.setHeroBuff('extraProjectiles', 2, 6);
+      }
+      this.sound.playSlash();
+      this.camera.shake(0.15, 4);
+      return;
+    }
+
+    if (id === 'kayrurururu') {
+      if (slot === 1) {
+        // Série de Flexões: shockwave rings plus a temporary armor stance.
+        this.heroWaveTimer = 4;
+        this.heroWaveTick = 0;
+        this.heroWaveRadius = 115 * this.player.areaMultiplier;
+        this.heroWaveDamage = 14;
+        this.heroWaveColor = '#f87171';
+        this.setHeroBuff('armor', 8, 6);
+      } else if (slot === 2) {
+        // Arremesso de Anilha: ricochets with growing damage.
+        this.heroChainStrike(5, 22, 8, '#fbbf24');
+      } else {
+        // Modo Monstro: brute force buff and a shoving roar.
+        this.setHeroBuff('might', 1.4, 6);
+        this.setHeroBuff('speed', 1.3, 6);
+        this.setHeroBuff('attackSpeed', 1.2, 6);
+        this.heroAreaDamage(this.player.x, this.player.y, 190, 10, {
+          knock: 380,
+          color: '#f87171',
+        });
+      }
+      this.vfx.addSparks(this.player.x, this.player.y, '#f87171', 22);
+      this.sound.playSlash();
+      this.camera.shake(0.2, 5);
+      return;
+    }
+
+    if (id === 'dr_janelinha') {
+      if (slot === 1) {
+        // Surto Controlado: contagious poison in a wide radius.
+        const radius = 260 * this.player.areaMultiplier;
+        this.heroAreaDamage(this.player.x, this.player.y, radius, 12, {
+          knock: 40,
+          color: '#84cc16',
+        });
+        const spread: Enemy[] = [];
+        for (const enemy of this.enemies) {
+          if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+          const dist = Math.hypot(enemy.x - this.player.x, enemy.y - this.player.y);
+          if (dist > radius) continue;
+          enemy.applyPoison(8, 6, 'ferrao_formiga', true);
+          spread.push(enemy);
+        }
+        // One extra hop: nearby fauna also catches the outbreak.
+        for (const source of spread) {
+          for (const enemy of this.nearestEnemies(source.x, source.y, 2, 120)) {
+            if (enemy === source) continue;
+            enemy.applyPoison(6, 6, 'ferrao_formiga', true);
+          }
+        }
+        this.vfx.addSparks(this.player.x, this.player.y, '#84cc16', 24);
+      } else if (slot === 2) {
+        // Quarentena: a lingering slow/damage field.
+        const anchor = this.nearestEnemies(this.player.x, this.player.y, 1, 420)[0];
+        const x = anchor ? anchor.x : this.player.x;
+        const y = anchor ? anchor.y : this.player.y;
+        this.heroZones.push({
+          x,
+          y,
+          radius: 120 * this.player.areaMultiplier,
+          damage: 9,
+          life: 5,
+          tickTimer: 0,
+          color: '#84cc16',
+          slow: 0.45,
+        });
+        this.weaponSystem.spawnRingPulse(x, y, 120, '#84cc16', 0.5);
+      } else {
+        // Soro da Verdade: kills heal and nearby fauna is left exposed.
+        this.heroSoroTimer = 6;
+        this.heroSoroTick = 0;
+        this.weaponSystem.spawnRingPulse(this.player.x, this.player.y, 300, '#22c55e', 0.6);
+      }
+      this.sound.playSlash();
+      this.camera.shake(0.12, 3);
+      return;
+    }
+
+    if (id === 'lula') {
+      if (slot === 1) {
+        // Punho do L: a heavy cone punch.
+        const range = 220 * this.player.areaMultiplier;
+        const facing = Math.hypot(this.player.facingX, this.player.facingY) || 1;
+        const fx = this.player.facingX / facing;
+        const fy = this.player.facingY / facing;
+        const minDot = Math.cos(0.65);
+        const targets = this.enemies.slice();
+        for (const enemy of targets) {
+          if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+          const dx = enemy.x - this.player.x;
+          const dy = enemy.y - this.player.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > range || dist < 1) continue;
+          if ((dx * fx + dy * fy) / dist < minDot) continue;
+          const dealt = enemy.computeDamageTaken(
+            Math.max(1, Math.round(38 * this.player.might)),
+            this.player.debuffDamageBonus
+          );
+          const dead = enemy.takeDamage(dealt, dx / dist, dy / dist, 340);
+          enemy.applyStun(1);
+          this.vfx.addDamageNumber(enemy.x, enemy.y - 6, dealt, false);
+          if (dead) {
+            this.onEnemyKilled(enemy);
+            const index = this.enemies.indexOf(enemy);
+            if (index >= 0) this.enemies.splice(index, 1);
+          }
+        }
+        for (let i = 1; i <= 3; i++) {
+          this.weaponSystem.spawnRingPulse(
+            this.player.x + fx * i * 55,
+            this.player.y + fy * i * 55,
+            50,
+            '#f472b6',
+            0.35
+          );
+        }
+      } else if (slot === 2) {
+        // Dedo na Ferida: mark the nearest eight for a death blast.
+        const marks = this.nearestEnemies(this.player.x, this.player.y, 8, 620);
+        for (const enemy of marks) {
+          this.heroDetonationSet.add(enemy);
+          enemy.applyVulnerability(0.15, 10);
+          this.weaponSystem.spawnRingPulse(enemy.x, enemy.y, 28, '#f472b6', 0.3);
+        }
+        this.vfx.addSparks(this.player.x, this.player.y, '#f472b6', 16);
+      } else {
+        // Autoridade Máxima: extra projectile and faster attacks.
+        this.heroWaveTimer = 6;
+        this.heroWaveTick = 0;
+        this.heroWaveRadius = 180 * this.player.areaMultiplier;
+        this.heroWaveDamage = 14;
+        this.heroWaveColor = '#f472b6';
+        this.setHeroBuff('extraProjectiles', 1, 6);
+        this.setHeroBuff('attackSpeed', 1.25, 6);
+      }
+      this.sound.playSlash();
+      this.camera.shake(0.18, 5);
+    }
+  }
+
+  private nearestEnemies(x: number, y: number, count: number, maxRange: number): Enemy[] {
+    const maxSq = maxRange * maxRange;
+    const found: { enemy: Enemy; distance: number }[] = [];
+    for (const enemy of this.enemies) {
+      if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+      const dx = enemy.x - x;
+      const dy = enemy.y - y;
+      const distance = dx * dx + dy * dy;
+      if (distance > maxSq) continue;
+      found.push({ enemy, distance });
+    }
+    found.sort((a, b) => a.distance - b.distance);
+    return found.slice(0, count).map((entry) => entry.enemy);
+  }
+
+  private heroAreaDamage(
+    x: number,
+    y: number,
+    radius: number,
+    rawDamage: number,
+    options: { knock?: number; stun?: number; color?: string; pull?: boolean } = {}
+  ): void {
+    const damage = Math.max(1, Math.round(rawDamage * this.player.might));
+    const targets = this.enemies.slice();
+    for (const enemy of targets) {
+      if (enemy.hp <= 0 || enemy.isSubmerged || this.enemies.indexOf(enemy) < 0) continue;
+      const dx = enemy.x - x;
+      const dy = enemy.y - y;
+      if (dx * dx + dy * dy > radius * radius) continue;
+      const dist = Math.max(1, Math.hypot(dx, dy));
+      const direction = options.pull ? -1 : 1;
+      const dealt = enemy.computeDamageTaken(damage, this.player.debuffDamageBonus);
+      const dead = enemy.takeDamage(
+        dealt,
+        (dx / dist) * direction,
+        (dy / dist) * direction,
+        options.knock ?? 60
+      );
+      this.vfx.addDamageNumber(enemy.x, enemy.y - 6, dealt, false);
+      if (options.stun) enemy.applyStun(options.stun);
+      if (dead) {
+        this.onEnemyKilled(enemy);
+        const index = this.enemies.indexOf(enemy);
+        if (index >= 0) this.enemies.splice(index, 1);
+      }
+    }
+    if (options.color) {
+      this.weaponSystem.spawnRingPulse(x, y, radius, options.color, 0.4);
+    }
+  }
+
+  /** Ricocheting strike: each jump seeks the nearest enemy not hit yet. */
+  private heroChainStrike(jumps: number, baseDamage: number, growth: number, color: string): void {
+    const hit = new Set<Enemy>();
+    let fromX = this.player.x;
+    let fromY = this.player.y;
+    for (let i = 0; i < jumps; i++) {
+      let best: Enemy | null = null;
+      let bestDistance = Infinity;
+      for (const enemy of this.enemies) {
+        if (enemy.hp <= 0 || enemy.isSubmerged || hit.has(enemy)) continue;
+        const dx = enemy.x - fromX;
+        const dy = enemy.y - fromY;
+        const distance = dx * dx + dy * dy;
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = enemy;
+        }
+      }
+      if (!best) break;
+      if (i > 0 && bestDistance > 620 * 620) break;
+      hit.add(best);
+      const damage = Math.max(1, Math.round((baseDamage + growth * i) * this.player.might));
+      const dx = best.x - fromX;
+      const dy = best.y - fromY;
+      const dist = Math.max(1, Math.hypot(dx, dy));
+      const dealt = best.computeDamageTaken(damage, this.player.debuffDamageBonus);
+      const dead = best.takeDamage(dealt, dx / dist, dy / dist, 90);
+      this.weaponSystem.spawnRingPulse(best.x, best.y, 34, color, 0.25);
+      this.vfx.addSparks(best.x, best.y, color, 5);
+      this.vfx.addDamageNumber(best.x, best.y - 6, dealt, false);
+      fromX = best.x;
+      fromY = best.y;
+      if (dead) {
+        this.onEnemyKilled(best);
+        const index = this.enemies.indexOf(best);
+        if (index >= 0) this.enemies.splice(index, 1);
+      }
+    }
+  }
+
+  private setHeroBuff(
+    kind: 'might' | 'speed' | 'area' | 'attackSpeed' | 'armor' | 'extraProjectiles',
+    value: number,
+    duration: number
+  ): void {
+    switch (kind) {
+      case 'might':
+        this.heroBuffMightMul = value;
+        this.heroBuffMightTimer = duration;
+        break;
+      case 'speed':
+        this.heroBuffSpeedMul = value;
+        this.heroBuffSpeedTimer = duration;
+        break;
+      case 'area':
+        this.heroBuffAreaMul = value;
+        this.heroBuffAreaTimer = duration;
+        break;
+      case 'attackSpeed':
+        this.heroBuffAttackSpeedMul = value;
+        this.heroBuffAttackSpeedTimer = duration;
+        break;
+      case 'armor':
+        this.heroBuffArmorBonus = value;
+        this.heroBuffArmorTimer = duration;
+        break;
+      case 'extraProjectiles':
+        this.heroBuffExtraProjectiles = value;
+        this.heroBuffExtraProjectilesTimer = duration;
+        break;
+    }
+    this.applyHeroBuffs();
+  }
+
+  private applyHeroBuffs(): void {
+    const player = this.player;
+    player.specialMightMul = this.heroBuffMightTimer > 0 ? this.heroBuffMightMul : 1;
+    player.specialSpeedMul = this.heroBuffSpeedTimer > 0 ? this.heroBuffSpeedMul : 1;
+    player.specialAreaMul = this.heroBuffAreaTimer > 0 ? this.heroBuffAreaMul : 1;
+    player.specialAttackSpeedMul =
+      this.heroBuffAttackSpeedTimer > 0 ? this.heroBuffAttackSpeedMul : 1;
+    player.specialArmorBonus = this.heroBuffArmorTimer > 0 ? this.heroBuffArmorBonus : 0;
+    player.specialExtraProjectiles =
+      this.heroBuffExtraProjectilesTimer > 0 ? this.heroBuffExtraProjectiles : 0;
+    this.weaponSystem.recalculatePlayerStats(player);
+  }
+
+  private updateHeroSpecials(dt: number): void {
+    for (let i = 0; i < this.heroSpecialCooldowns.length; i++) {
+      if (this.heroSpecialCooldowns[i] > 0) {
+        this.heroSpecialCooldowns[i] = Math.max(0, this.heroSpecialCooldowns[i] - dt);
+      }
+    }
+
+    let buffsChanged = false;
+    const tickBuff = (timer: number) => {
+      const next = timer > 0 ? timer - dt : 0;
+      return next > 0 ? next : 0;
+    };
+    const mightTimer = tickBuff(this.heroBuffMightTimer);
+    if (mightTimer !== this.heroBuffMightTimer) {
+      this.heroBuffMightTimer = mightTimer;
+      if (mightTimer <= 0) this.heroBuffMightMul = 1;
+      buffsChanged = true;
+    }
+    const speedTimer = tickBuff(this.heroBuffSpeedTimer);
+    if (speedTimer !== this.heroBuffSpeedTimer) {
+      this.heroBuffSpeedTimer = speedTimer;
+      if (speedTimer <= 0) this.heroBuffSpeedMul = 1;
+      buffsChanged = true;
+    }
+    const areaTimer = tickBuff(this.heroBuffAreaTimer);
+    if (areaTimer !== this.heroBuffAreaTimer) {
+      this.heroBuffAreaTimer = areaTimer;
+      if (areaTimer <= 0) this.heroBuffAreaMul = 1;
+      buffsChanged = true;
+    }
+    const attackTimer = tickBuff(this.heroBuffAttackSpeedTimer);
+    if (attackTimer !== this.heroBuffAttackSpeedTimer) {
+      this.heroBuffAttackSpeedTimer = attackTimer;
+      if (attackTimer <= 0) this.heroBuffAttackSpeedMul = 1;
+      buffsChanged = true;
+    }
+    const armorTimer = tickBuff(this.heroBuffArmorTimer);
+    if (armorTimer !== this.heroBuffArmorTimer) {
+      this.heroBuffArmorTimer = armorTimer;
+      if (armorTimer <= 0) this.heroBuffArmorBonus = 0;
+      buffsChanged = true;
+    }
+    const projectileTimer = tickBuff(this.heroBuffExtraProjectilesTimer);
+    if (projectileTimer !== this.heroBuffExtraProjectilesTimer) {
+      this.heroBuffExtraProjectilesTimer = projectileTimer;
+      if (projectileTimer <= 0) this.heroBuffExtraProjectiles = 0;
+      buffsChanged = true;
+    }
+    if (buffsChanged) this.applyHeroBuffs();
+
+    if (this.heroOrbitTimer > 0) {
+      this.heroOrbitTimer = Math.max(0, this.heroOrbitTimer - dt);
+      this.heroOrbitAngle += dt * 4.6;
+      this.heroOrbitTick -= dt;
+      if (this.heroOrbitTick <= 0) {
+        this.heroOrbitTick = 0.28;
+        const radius = 88 * this.player.areaMultiplier;
+        for (let k = 0; k < 4; k++) {
+          const angle = this.heroOrbitAngle + (k * Math.PI) / 2;
+          this.heroAreaDamage(
+            this.player.x + Math.cos(angle) * radius,
+            this.player.y + Math.sin(angle) * radius,
+            30,
+            11,
+            { knock: 40, color: '#fbbf24' }
+          );
+        }
+      }
+    }
+
+    if (this.heroWaveTimer > 0) {
+      this.heroWaveTimer = Math.max(0, this.heroWaveTimer - dt);
+      this.heroWaveTick -= dt;
+      if (this.heroWaveTick <= 0) {
+        this.heroWaveTick = 0.65;
+        this.heroAreaDamage(this.player.x, this.player.y, this.heroWaveRadius, this.heroWaveDamage, {
+          knock: 140,
+          color: this.heroWaveColor,
+        });
+      }
+    }
+
+    for (let i = this.heroBlasts.length - 1; i >= 0; i--) {
+      const blast = this.heroBlasts[i];
+      blast.delay -= dt;
+      if (blast.delay > 0) continue;
+      this.heroBlasts.splice(i, 1);
+      this.heroAreaDamage(blast.x, blast.y, blast.radius, blast.damage, {
+        knock: 200,
+        stun: blast.stun,
+        color: blast.color,
+      });
+      this.vfx.addSparks(blast.x, blast.y, blast.color, 20);
+      this.camera.shake(0.15, 4);
+      this.sound.playSlash();
+    }
+
+    for (let i = this.heroZones.length - 1; i >= 0; i--) {
+      const zone = this.heroZones[i];
+      zone.life -= dt;
+      if (zone.life <= 0) {
+        this.heroZones.splice(i, 1);
+        continue;
+      }
+      zone.tickTimer -= dt;
+      if (zone.tickTimer > 0) continue;
+      zone.tickTimer = 0.5;
+      this.heroAreaDamage(zone.x, zone.y, zone.radius, zone.damage, { knock: 0 });
+      for (const enemy of this.enemies) {
+        if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+        const dx = enemy.x - zone.x;
+        const dy = enemy.y - zone.y;
+        if (dx * dx + dy * dy <= zone.radius * zone.radius) {
+          enemy.applySlow(zone.slow, 0.65);
+        }
+      }
+    }
+
+    if (this.heroSoroTimer > 0) {
+      this.heroSoroTimer = Math.max(0, this.heroSoroTimer - dt);
+      this.heroSoroTick -= dt;
+      if (this.heroSoroTick <= 0) {
+        this.heroSoroTick = 1;
+        const radius = 320 * this.player.areaMultiplier;
+        for (const enemy of this.enemies) {
+          if (enemy.hp <= 0 || enemy.isSubmerged) continue;
+          const dx = enemy.x - this.player.x;
+          const dy = enemy.y - this.player.y;
+          if (dx * dx + dy * dy > radius * radius) continue;
+          enemy.applyVulnerability(0.25, 2.2);
+        }
+        this.weaponSystem.spawnRingPulse(this.player.x, this.player.y, radius, '#22c55e', 0.5);
+      }
+    }
+  }
+
   private updateSpecialAbility(dt: number): void {
     if (this.specialCooldown > 0) {
       this.specialCooldown = Math.max(0, this.specialCooldown - dt);
@@ -1028,6 +1703,7 @@ export class GameEngine {
     const specialRequested = this.input.consumeSpecial();
     if (specialRequested !== null) this.activateSpecial(specialRequested);
     this.updateSpecialAbility(dt);
+    this.updateHeroSpecials(dt);
 
     this.tribeHunter?.update(dt);
     this.anacondaNpc?.update(dt);
@@ -3704,6 +4380,20 @@ export class GameEngine {
     // Aura de Doma: unlocked fauna killed inside the aura is tamed on the spot.
     if (this.captureEnemyInAura(enemy)) return;
 
+    // Dedo na Ferida: a marked enemy explodes when it dies.
+    if (this.heroDetonationSet.delete(enemy)) {
+      this.heroAreaDamage(enemy.x, enemy.y, 100, 34, {
+        knock: 180,
+        color: '#f472b6',
+      });
+      this.vfx.addSparks(enemy.x, enemy.y, '#f472b6', 18);
+    }
+
+    // Soro da Verdade: every kill while the serum lasts heals the doctor.
+    if (this.heroSoroTimer > 0) {
+      this.player.heal(Math.max(1, Math.round(this.player.maxHp * 0.02)));
+    }
+
     // Fúria da Matilha: the pack's specials are paid with kills. Pack kills
     // charge faster, elites and bosses are worth far more than common fauna.
     if (this.isBeastmaster()) {
@@ -4133,6 +4823,14 @@ export class GameEngine {
       difficulty: this.difficulty.id,
       difficultyName: this.difficulty.name,
       weaponStats,
+      record: {
+        timeSurvived: this.sessionRecord.timeSurvived,
+        kills: this.sessionRecord.kills,
+        highestLevel: this.sessionRecord.highestLevel,
+        newTime: timeSurvived > this.sessionRecord.timeSurvived,
+        newKills: this.kills > this.sessionRecord.kills,
+        newLevel: this.player.level > this.sessionRecord.highestLevel,
+      },
     };
   }
 
@@ -4235,6 +4933,8 @@ export class GameEngine {
       };
     };
 
+    const heroSpecialDefs = HERO_SPECIALS[this.player.character.id];
+
     const specialAbilities = isDomador
       ? [
           beastSpecial(
@@ -4256,41 +4956,61 @@ export class GameEngine {
             'Cada fera ativa se divide em 2 clones por 6s: +60% velocidade, +80% cadência e +10% dano. Os clones não ocupam vagas, ignoram Guarda/Agressivo e caçam por toda a tela.'
           ),
         ]
-      : [
-          {
-            key: '1',
-            name: isDerson ? 'Entrega Expressa' : undefined,
-            description: isDerson
-              ? 'Arrancada invulnerável de 2,5s que empurra inimigos e deixa um rastro de café fervente.'
-              : 'Especial exclusivo do Derson.',
-            cooldown: isDerson ? this.specialCooldown : 0,
-            cooldownMax: SPECIAL_1_COOLDOWN,
-            unlocked: isDerson,
-            active: isDerson && this.specialActiveTimer > 0,
-          },
-          {
-            key: '2',
-            name: isDerson ? 'Chuva de Pão de Queijo' : undefined,
-            description: isDerson
-              ? 'Dispara 20 pães de queijo explosivos em 360°, causando dano em área, empurrando e atordoando a horda.'
-              : 'Especial exclusivo do Derson.',
-            cooldown: isDerson ? this.special2Cooldown : 0,
-            cooldownMax: SPECIAL_2_COOLDOWN,
-            unlocked: isDerson,
-            active: false,
-          },
-          {
-            key: '3',
-            name: isDerson ? 'Corte de Giro' : undefined,
-            description: isDerson
-              ? 'Acelera a moto ao limite e gira por 4s, emitindo anéis sonoros a cada 0,5s que causam dano em área e afastam inimigos.'
-              : 'Especial exclusivo do Derson.',
-            cooldown: isDerson ? this.special3Cooldown : 0,
-            cooldownMax: SPECIAL_3_COOLDOWN,
-            unlocked: isDerson,
-            active: isDerson && this.player.spinCutTimer > 0,
-          },
-        ];
+      : isDerson
+        ? [
+            {
+              key: '1',
+              name: 'Entrega Expressa',
+              description:
+                'Arrancada invulnerável de 2,5s que empurra inimigos e deixa um rastro de café fervente.',
+              icon: '☕',
+              cooldown: this.specialCooldown,
+              cooldownMax: SPECIAL_1_COOLDOWN,
+              unlocked: true,
+              active: this.specialActiveTimer > 0,
+            },
+            {
+              key: '2',
+              name: 'Chuva de Pão de Queijo',
+              description:
+                'Dispara 20 pães de queijo explosivos em 360°, causando dano em área, empurrando e atordoando a horda.',
+              icon: '🧀',
+              cooldown: this.special2Cooldown,
+              cooldownMax: SPECIAL_2_COOLDOWN,
+              unlocked: true,
+              active: false,
+            },
+            {
+              key: '3',
+              name: 'Corte de Giro',
+              description:
+                'Acelera a moto ao limite e gira por 4s, emitindo anéis sonoros a cada 0,5s que causam dano em área e afastam inimigos.',
+              icon: '🏍️',
+              cooldown: this.special3Cooldown,
+              cooldownMax: SPECIAL_3_COOLDOWN,
+              unlocked: true,
+              active: this.player.spinCutTimer > 0,
+            },
+          ]
+        : heroSpecialDefs
+          ? heroSpecialDefs.map((definition, index) => {
+              const slot = index + 1;
+              const unlocked = this.heroSpecialUnlocked(slot);
+              return {
+                key: String(slot),
+                name: definition.name,
+                description: definition.description,
+                icon: definition.icon,
+                cooldown: this.heroSpecialCooldowns[index],
+                cooldownMax: definition.cooldown,
+                unlocked,
+                active: unlocked && this.heroSpecialActive(slot),
+                unlockHint: unlocked
+                  ? undefined
+                  : `Libera no nível ${definition.unlockLevel}`,
+              };
+            })
+          : [];
 
     this.callbacks.onHUDUpdate({
       hunterQuest: this.tribeHunter ? { ...this.hunterQuest } : undefined,
@@ -4325,6 +5045,8 @@ export class GameEngine {
           }
         : undefined,
       activeBoss,
+      nextEvent: this.waveDirector.getNextEvent(),
+      fusionReady: this.weaponSystem.getReadyFusions().map((option) => option.name),
       eventAlert: this.waveDirector.eventAlert || undefined,
       objectives: this.getHunterForestMission(),
       companions: [...this.companions.ids],
@@ -4407,6 +5129,24 @@ export class GameEngine {
           0,
           Math.PI * 2
         );
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Dedo na Ferida: marked fauna carries a magenta ring until it detonates.
+    if (this.heroDetonationSet.size > 0) {
+      for (let i = 0; i < this.enemies.length; i++) {
+        const enemy = this.enemies[i];
+        if (!this.heroDetonationSet.has(enemy)) continue;
+        const screen = camera.worldToScreen(enemy.x, enemy.y);
+        const pulse = 0.65 + Math.sin(this.waveDirector.survivalTime * 6 + enemy.id) * 0.3;
+        ctx.save();
+        ctx.strokeStyle = `rgba(244, 114, 182, ${pulse})`;
+        ctx.lineWidth = 2.2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y - enemy.radius * 0.3, enemy.radius * 1.6, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }

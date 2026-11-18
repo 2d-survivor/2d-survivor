@@ -36,7 +36,10 @@ import {
   Volume2,
   Map as MapIcon,
   TreePine,
+  Minus,
+  Plus,
 } from 'lucide-react';
+import { UI_SCALE_LIMITS, useUiScale } from './useUiScale';
 
 interface StartScreenProps {
   savedData: SavedGameData;
@@ -96,6 +99,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
   const [isLoadoutOpen, setIsLoadoutOpen] = useState(false);
   const [isAmazonGuideOpen, setIsAmazonGuideOpen] = useState(false);
   const { selectionVolume } = useAudioSettings();
+  const { uiScale, setUiScale } = useUiScale();
   const [isSelectionMusicPlaying, setIsSelectionMusicPlaying] = useState(false);
   const selectionAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -456,6 +460,32 @@ export const StartScreen: React.FC<StartScreenProps> = ({ savedData, onStartGame
                     <Play className="h-4 w-4 fill-current" />
                   )}
                 </button>
+                <label className="stone-panel flex items-center gap-2 px-3 py-1.5" title="Tamanho da interface durante a partida">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#9ca3af]">
+                    Interface
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setUiScale(uiScale - 0.1)}
+                    disabled={uiScale <= UI_SCALE_LIMITS.min + 0.001}
+                    aria-label="Diminuir interface do jogo"
+                    className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border border-[#7c663b] bg-[#262a20] text-[#e3bf78] transition hover:border-amber-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Minus className="h-3 w-3" />
+                  </button>
+                  <span className="w-8 text-right font-mono text-[11px] text-[#cbd5e1]">
+                    {Math.round(uiScale * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setUiScale(uiScale + 0.1)}
+                    disabled={uiScale >= UI_SCALE_LIMITS.max - 0.001}
+                    aria-label="Aumentar interface do jogo"
+                    className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border border-[#7c663b] bg-[#262a20] text-[#e3bf78] transition hover:border-amber-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </label>
               </div>
             </div>
 
