@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import Image from 'next/image';
-import { Info, PawPrint, Shield, Swords, Zap } from 'lucide-react';
+import { Info, Shield, Swords, Zap } from 'lucide-react';
 import { Player } from '@/game/entities/Player';
 import { CHARACTERS } from '@/game/data/characters';
 import { LULA_SKILL, WEAPON_REGISTRY } from '@/game/data/upgrades';
@@ -22,6 +22,7 @@ import {
 import type { CharacterConfig } from '@/game/types';
 import { CharacterAtlasPortrait } from './CharacterAtlasPortrait';
 import { renderNamedIcon, renderWeaponIcon } from './GameIcons';
+import { renderPetIcon } from './PetIcon';
 
 // Level-1 starter-weapon values mirrored from WeaponSystem.fireWeapon and each
 // trigger. Damage is shown before the character's might bonus; cooldown is
@@ -356,8 +357,8 @@ const DomadorInfo: React.FC = () => (
               className="rounded-md border border-[#2a2f3a] bg-slate-950/50 p-2"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                <span className="flex items-center gap-1 text-[11px] font-bold text-[#f3f4f6]">
-                  <PawPrint className="h-3 w-3 text-emerald-300" aria-hidden="true" />
+                <span className="flex items-center gap-1.5 text-[11px] font-bold text-[#f3f4f6]">
+                  {renderPetIcon(species.type, 'h-4 w-4', species.name)}
                   {species.name}
                 </span>
                 <span className="text-[8px] font-bold uppercase tracking-wide text-slate-400">

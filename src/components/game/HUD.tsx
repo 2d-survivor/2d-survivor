@@ -24,8 +24,6 @@ import {
   VolumeX,
   Pause,
   Fish,
-  Bird,
-  Bug,
   PawPrint,
   Lock,
   Unlock,
@@ -34,25 +32,7 @@ import {
   Shield,
   Swords,
 } from 'lucide-react';
-
-const PET_BIRD_TYPES = new Set(['toucan', 'blue_butterfly', 'cicada', 'bat']);
-const PET_BUG_TYPES = new Set([
-  'bullet_ant',
-  'leafcutter_ant',
-  'giant_centipede',
-  'rhino_beetle',
-  'sawyer_beetle',
-  'praying_mantis',
-  'stick_bug',
-  'elite_goliath_spider',
-]);
-
-/** Pet bar icon: birds and insects keep their silhouette, the rest use a paw. */
-function renderPetIcon(type: string, sizeClass: string = 'h-6 w-6'): React.ReactNode {
-  if (PET_BIRD_TYPES.has(type)) return <Bird className={`${sizeClass} text-lime-300`} />;
-  if (PET_BUG_TYPES.has(type)) return <Bug className={`${sizeClass} text-amber-300`} />;
-  return <PawPrint className={`${sizeClass} text-emerald-300`} />;
-}
+import { renderPetIcon } from './PetIcon';
 
 interface HUDProps {
   hud: HUDState;
@@ -334,7 +314,7 @@ export const HUD: React.FC<HUDProps> = ({
                 className="pointer-events-none absolute inset-x-0 bottom-full z-40 mb-2 rounded-xl border border-amber-600/80 bg-slate-950/95 px-3 py-2 shadow-2xl shadow-amber-950/40 backdrop-blur-md"
               >
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  {renderPetIcon(hoveredSpecies, 'h-5 w-5')}
+                  {renderPetIcon(hoveredSpecies, 'h-6 w-6', hoveredSpeciesMeta?.name ?? hoveredSpecies)}
                   <span className="text-xs font-black text-amber-100">
                     {hoveredSpeciesMeta?.name ?? hoveredSpecies}
                   </span>
@@ -403,7 +383,7 @@ export const HUD: React.FC<HUDProps> = ({
                     : 'border-slate-800 text-slate-500 opacity-70 grayscale hover:border-slate-600 hover:opacity-100 hover:grayscale-0'
                     }`}
                 >
-                  {renderPetIcon(species.type, 'h-5 w-5')}
+                  {renderPetIcon(species.type, 'h-7 w-7', species.name)}
                   <span className="w-full break-words text-center text-[7px] font-bold uppercase leading-[1.05] tracking-wide">
                     {species.name}
                   </span>
@@ -555,7 +535,7 @@ export const HUD: React.FC<HUDProps> = ({
                       : 'border-amber-700/70 hover:border-amber-500'
                       }`}
                   >
-                    {renderPetIcon(pet.type, 'h-6 w-6')}
+                    {renderPetIcon(pet.type, 'h-7 w-7', pet.name)}
                     <span className="w-full truncate text-center text-[8px] font-bold uppercase tracking-wide text-slate-300">
                       {pet.name}
                     </span>
