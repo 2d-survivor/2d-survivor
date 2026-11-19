@@ -54,6 +54,7 @@ import {
   MUD_OTTER_SPEED_MULTIPLIER,
   MUD_RIVER_PREDATOR_SPEED_MULTIPLIER,
   MUD_SPEED_MULTIPLIER,
+  DEEP_WATER_SPEED_MULTIPLIER,
   WATER_SPEED_MULTIPLIER,
   WorldSystem,
 } from '../systems/WorldProps';
@@ -1803,6 +1804,8 @@ export class GameEngine {
 
     // 1. Terrain physics: mud and water slow the hero down before the step.
     const playerInWater = this.worldProps.isWaterSurface(this.player.x, this.player.y);
+    const playerInDeepWater =
+      playerInWater && this.worldProps.isDeepWater(this.player.x, this.player.y);
     const playerInFlood =
       !playerInWater &&
       this.floodPhysicsActive &&
@@ -1822,7 +1825,9 @@ export class GameEngine {
     this.player.terrainSpeedMultiplier = this.player.isJumping
       ? 1
       : playerInWater || playerInFlood
-        ? WATER_SPEED_MULTIPLIER
+        ? playerInDeepWater
+          ? DEEP_WATER_SPEED_MULTIPLIER
+          : WATER_SPEED_MULTIPLIER
         : playerInMud
           ? MUD_SPEED_MULTIPLIER
           : 1;
@@ -1877,6 +1882,8 @@ export class GameEngine {
       // +30% boost there; the Ariranha gets +20% instead. The Sucuri is
       // amphibious and instead earns +50% in water and +30% on banks/mud.
       const enemyInWater = this.worldProps.isWaterSurface(e.x, e.y);
+      const enemyInDeepWater =
+        enemyInWater && this.worldProps.isDeepWater(e.x, e.y);
       const enemyInFlood =
         !enemyInWater &&
         this.floodPhysicsActive &&
@@ -1918,7 +1925,9 @@ export class GameEngine {
       } else {
         e.terrainSpeedMultiplier =
           enemyInWater || floodSlowsEnemy
-            ? WATER_SPEED_MULTIPLIER
+            ? enemyInDeepWater
+              ? DEEP_WATER_SPEED_MULTIPLIER
+              : WATER_SPEED_MULTIPLIER
             : enemyInMud
               ? MUD_SPEED_MULTIPLIER
               : 1.0;

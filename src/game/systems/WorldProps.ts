@@ -108,6 +108,14 @@ export const SHALLOW_WATER_SPEED_MULTIPLIER = 0.82;
 export const DEEP_WATER_SPEED_MULTIPLIER = 0.65;
 export const MUD_SPEED_MULTIPLIER = 0.8;
 
+// Lakes are split into a turquoise shallow ring near the beach and a deep blue
+// core. The value is the normalized radius (0 = centre, 1 = shoreline) where
+// the shallow band ends.
+export const DEEP_WATER_DEPTH_RATIO = 0.66;
+
+// Width of the rocky escarpment painted along the left edge of the map.
+const ESCARPMENT_WIDTH = 210;
+
 // Iara's Dynamic Flood expands the river/lakes until 70% of the dry land is
 // submerged. The target radius is measured once on a coarse land grid and then
 // reused every frame, keeping the cycle cheap.
@@ -279,6 +287,16 @@ interface FernProp {
   rotation: number;
 }
 
+interface FlowerProp {
+  x: number;
+  y: number;
+  size: number;
+  tone: number;
+  rotation: number;
+  /** 0 = white, 1 = pink, 2 = yellow, 3 = violet. */
+  kind: number;
+}
+
 interface RockProp {
   x: number;
   y: number;
@@ -363,6 +381,7 @@ export class WorldSystem {
   private lilies: LilyProp[] = [];
   private palms: PalmProp[] = [];
   private ferns: FernProp[] = [];
+  private flowers: FlowerProp[] = [];
   private rocks: RockProp[] = [];
   private bankPlants: BankPlantProp[] = [];
   private groundTufts: GroundTuftProp[] = [];
@@ -418,7 +437,24 @@ export class WorldSystem {
     this.rocks = this.rocks.filter(outsideCamp);
     this.palms = this.palms.filter(outsideCamp);
     this.ferns = this.ferns.filter(outsideCamp);
+    this.flowers = this.flowers.filter(outsideCamp);
     this.groundTufts = this.groundTufts.filter(outsideCamp);
+    // Keep trees and clutter off the left rocky escarpment.
+    const clearOfWall = (prop: { x: number }) =>
+      prop.x > -FOREST_HALF_SIZE + ESCARPMENT_WIDTH + 24;
+    this.trees = this.trees.filter(clearOfWall);
+    this.decorTrees = this.decorTrees.filter(clearOfWall);
+    this.fruitTrees = this.fruitTrees.filter(clearOfWall);
+    this.thornBushes = this.thornBushes.filter(clearOfWall);
+    this.herbs = this.herbs.filter(clearOfWall);
+    this.rocks = this.rocks.filter(clearOfWall);
+    this.palms = this.palms.filter(clearOfWall);
+    this.ferns = this.ferns.filter(clearOfWall);
+    this.flowers = this.flowers.filter(clearOfWall);
+    this.groundTufts = this.groundTufts.filter(clearOfWall);
+    this.beachStones = this.beachStones.filter(clearOfWall);
+    this.beachBranches = this.beachBranches.filter(clearOfWall);
+    this.bankPlants = this.bankPlants.filter(clearOfWall);
     // Generation deliberately uses the original scans while the scenery is growing.
     this.treeIndex = new StaticSpatialIndex(this.trees, tree => ({ x: tree.x, y: tree.y, radius: tree.size * 0.32 }));
     this.decorTreeIndex = new StaticSpatialIndex(this.decorTrees, tree => ({ x: tree.x, y: tree.y, radius: this.getDecorTreeCollisionRadius(tree) }));
@@ -1284,6 +1320,18 @@ export class WorldSystem {
       });
     });
 
+    // Wildflower clusters: small, bright accents that break the green floor.
+    scatter(240, (x, y) => {
+      this.flowers.push({
+        x,
+        y,
+        size: 4 + random() * 5,
+        tone: random(),
+        rotation: (random() - 0.5) * 0.6,
+        kind: Math.floor(random() * 4),
+      });
+    });
+
     scatter(45, (x, y) => {
       this.rocks.push({
         x,
@@ -1312,6 +1360,9 @@ export class WorldSystem {
     );
     this.ferns = this.ferns.filter((fern) =>
       clearOfPlateaus(fern.x, fern.y, fern.size)
+    );
+    this.flowers = this.flowers.filter((flower) =>
+      clearOfPlateaus(flower.x, flower.y, flower.size + 4)
     );
     this.rocks = this.rocks.filter((rock) =>
       clearOfPlateaus(rock.x, rock.y, rock.size)
@@ -1842,6 +1893,36 @@ export class WorldSystem {
       if (rho <= this.getLakeEdgeScale(lake, angle)) {
         return true;
       }
+    }
+
+    return false;
+  }
+
+  /**
+   * True only inside the deep blue core of a lake. Wading there costs extra
+   * speed, while the turquoise ring near the beach stays at normal water pace.
+   */
+  public isDeepWater(x: number, y: number): boolean {
+    if (this.mapId !== 'amazon_forest') return false;
+    if (Math.abs(x) > FOREST_HALF_SIZE || Math.abs(y) > FOREST_HALF_SIZE) return false;
+
+    for (let i = 0; i < this.lakes.length; i++) {
+      const lake = this.lakes[i];
+      const dx = x - lake.x;
+      const dy = y - lake.y;
+      const bound = Math.max(lake.rx, lake.ry) * 1.17;
+      if (Math.abs(dx) > bound || Math.abs(dy) > bound) continue;
+      const cos = Math.cos(-lake.rotation);
+      const sin = Math.sin(-lake.rotation);
+      const lx = dx * cos - dy * sin;
+      const ly = dx * sin + dy * cos;
+      const rho = Math.sqrt(
+        (lx * lx) / (lake.rx * lake.rx) + (ly * ly) / (lake.ry * lake.ry)
+      );
+      const angle = this.getLakeNormalizedAngle(lake, x, y);
+      const edge = this.getLakeEdgeScale(lake, angle);
+      if (rho > edge) continue;
+      return rho <= edge * DEEP_WATER_DEPTH_RATIO;
     }
 
     return false;
@@ -4701,12 +4782,14 @@ export class WorldSystem {
     const stepX = dx / steps;
     const stepY = dy / steps;
     const limit = FOREST_HALF_SIZE - radius;
+    // The left edge is a solid rocky escarpment, so walking stops at its base.
+    const minX = -FOREST_HALF_SIZE + ESCARPMENT_WIDTH + radius;
     let x = fromX;
     let y = fromY;
 
     for (let i = 0; i < steps; i++) {
       // Resolve each axis independently so the player can slide along props.
-      const nextX = Math.max(-limit, Math.min(limit, x + stepX));
+      const nextX = Math.max(minX, Math.min(limit, x + stepX));
       if (!this.collidesWithTree(nextX, y, radius)) {
         if (
           !this.blocksOnPlateauRim(x, y, nextX, y, airborne, radius) &&
@@ -4760,9 +4843,11 @@ export class WorldSystem {
     // trapping it forever against the tree it overlaps.
     const startedInsideTree = this.collidesWithDecorTree(fromX, fromY, radius);
     const startedInsideCave = this.forestCave?.collides(fromX, fromY, radius) ?? false;
+    // Keep land animals off the left escarpment as well.
+    const minX = -FOREST_HALF_SIZE + ESCARPMENT_WIDTH + radius;
 
     for (let i = 0; i < steps; i++) {
-      const nextX = x + stepX;
+      const nextX = Math.max(minX, x + stepX);
       if (
         (startedInsideTree || !this.collidesWithDecorTree(nextX, y, radius)) &&
         (startedInsideCave || !this.forestCave?.collides(nextX, y, radius))
@@ -5245,12 +5330,210 @@ export class WorldSystem {
       }
 
       this.renderPlateaus(ctx, camera);
+      this.renderLeftEscarpment(ctx, camera);
 
       ctx.restore();
 
       this.renderAmazonWater(ctx, camera);
       this.forestCave?.renderPath(ctx, camera);
     }
+  }
+
+  /**
+   * Paints the tall rocky escarpment that walls off the left edge of the map.
+   * The outer lip stays mossy while the exposed face is cut by strata cracks,
+   * roots and hanging vines that sway over the forest floor.
+   */
+  private renderLeftEscarpment(ctx: CanvasRenderingContext2D, camera: Camera): void {
+    if (this.mapId !== 'amazon_forest') return;
+
+    const edge = -FOREST_HALF_SIZE;
+    const foot = edge + ESCARPMENT_WIDTH;
+    if (camera.x - camera.viewportWidth / 2 > foot + 200) return;
+
+    const startY = Math.max(-FOREST_HALF_SIZE, camera.y - camera.viewportHeight / 2 - 160);
+    const endY = Math.min(FOREST_HALF_SIZE, camera.y + camera.viewportHeight / 2 + 160);
+    if (endY <= startY) return;
+
+    const innerAt = (y: number): number =>
+      foot + Math.sin(y * 0.0037) * 16 + Math.sin(y * 0.0113 + 1.7) * 7;
+    const lipAt = (y: number): number =>
+      edge + 58 + Math.sin(y * 0.0061 + 0.6) * 7 + Math.sin(y * 0.016 + 2.2) * 2.5;
+
+    const traceBand = (
+      leftAt: (y: number) => number,
+      rightAt: (y: number) => number
+    ): void => {
+      const step = 80;
+      ctx.beginPath();
+      ctx.moveTo(leftAt(startY), startY);
+      for (let y = startY + step; y < endY; y += step) {
+        ctx.lineTo(leftAt(y), y);
+      }
+      ctx.lineTo(leftAt(endY), endY);
+      for (let y = endY; y > startY; y -= step) {
+        ctx.lineTo(rightAt(y), y);
+      }
+      ctx.lineTo(rightAt(startY), startY);
+      ctx.closePath();
+    };
+
+    ctx.save();
+    ctx.translate(
+      camera.viewportWidth / 2 - camera.x + camera.shakeOffsetX,
+      camera.viewportHeight / 2 - camera.y + camera.shakeOffsetY
+    );
+
+    // Long shadow cast by the wall onto the forest floor.
+    const shadow = ctx.createLinearGradient(foot - 30, 0, foot + 150, 0);
+    shadow.addColorStop(0, 'rgba(4, 10, 6, 0.5)');
+    shadow.addColorStop(1, 'rgba(4, 10, 6, 0)');
+    ctx.fillStyle = shadow;
+    traceBand(() => foot - 30, (y) => innerAt(y) + 120);
+    ctx.fill();
+
+    // Exposed rock face: lighter earth/stone at the top, near-black at the foot.
+    const face = ctx.createLinearGradient(edge, 0, foot + 20, 0);
+    face.addColorStop(0, '#6b5334');
+    face.addColorStop(0.28, '#523f28');
+    face.addColorStop(0.66, '#3a2b1b');
+    face.addColorStop(1, '#241a11');
+    ctx.fillStyle = face;
+    traceBand(() => edge - 440, innerAt);
+    ctx.fill();
+
+    // Rough rock blocks and mossy patches scattered over the face.
+    ctx.save();
+    traceBand(() => edge - 440, innerAt);
+    ctx.clip();
+    const rockTones = [
+      'rgba(138, 112, 74, 0.18)',
+      'rgba(92, 70, 46, 0.24)',
+      'rgba(28, 20, 12, 0.2)',
+    ];
+    let blockSeed = 7321;
+    for (let y = startY - 40; y < endY + 40; y += 52) {
+      for (let k = 0; k < 4; k++) {
+        blockSeed = (blockSeed * 16807) % 2147483647;
+        const r = (blockSeed - 1) / 2147483646;
+        const bx = lipAt(y) + k * 30 + r * 10;
+        const bh = 14 + r * 24;
+        const bw = 26 + r * 26;
+        ctx.fillStyle = rockTones[(k + Math.floor(r * 3)) % 3];
+        ctx.fillRect(bx, y + r * 12, bw, bh);
+      }
+    }
+    for (let y = startY; y < endY; y += 120) {
+      const mx = lipAt(y) + 34 + Math.sin(y * 0.021) * 16;
+      ctx.fillStyle = 'rgba(52, 108, 50, 0.55)';
+      ctx.beginPath();
+      ctx.ellipse(mx, y + 26, 22, 9, 0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(100, 158, 78, 0.45)';
+      ctx.beginPath();
+      ctx.ellipse(mx - 5, y + 22, 11, 4.5, 0.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Dark base line where the wall meets the forest floor.
+    ctx.strokeStyle = 'rgba(8, 10, 7, 0.7)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    for (let y = startY; y <= endY; y += 40) {
+      if (y === startY) ctx.moveTo(innerAt(y), y);
+      else ctx.lineTo(innerAt(y), y);
+    }
+    ctx.stroke();
+
+    // Strata cracks running down the face.
+    ctx.strokeStyle = 'rgba(18, 14, 10, 0.55)';
+    ctx.lineWidth = 3;
+    for (let y = startY; y < endY; y += 110) {
+      const lean = Math.sin(y * 0.0087) * 22;
+      ctx.beginPath();
+      ctx.moveTo(lipAt(y) + 4, y);
+      ctx.quadraticCurveTo(
+        (lipAt(y) + innerAt(y)) / 2 + lean,
+        y + 26,
+        innerAt(y) - 8,
+        y + 44
+      );
+      ctx.stroke();
+    }
+
+    // Small boulders and rubble piled at the base.
+    for (let y = startY; y < endY; y += 150) {
+      const size = 10 + Math.abs(Math.sin(y * 0.021)) * 16;
+      ctx.fillStyle = 'rgba(70, 64, 52, 0.85)';
+      ctx.beginPath();
+      ctx.ellipse(innerAt(y) - 6, y, size, size * 0.6, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(128, 116, 92, 0.5)';
+      ctx.beginPath();
+      ctx.ellipse(innerAt(y) - size * 0.4, y - size * 0.24, size * 0.5, size * 0.28, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Mossy overhanging lip.
+    const lip = ctx.createLinearGradient(edge, 0, edge + 70, 0);
+    lip.addColorStop(0, '#2c6b36');
+    lip.addColorStop(1, '#1d4a26');
+    ctx.fillStyle = lip;
+    traceBand(() => edge - 440, lipAt);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(120, 176, 96, 0.65)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let y = startY; y <= endY; y += 40) {
+      if (y === startY) ctx.moveTo(lipAt(y), y);
+      else ctx.lineTo(lipAt(y), y);
+    }
+    ctx.stroke();
+
+    // Roots crawling out of the lip and gripping the rock.
+    ctx.strokeStyle = 'rgba(64, 42, 24, 0.9)';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    for (let y = startY + 30; y < endY; y += 190) {
+      const reach = 22 + Math.abs(Math.sin(y * 0.013)) * 30;
+      ctx.beginPath();
+      ctx.moveTo(lipAt(y), y);
+      ctx.quadraticCurveTo(lipAt(y) + reach * 0.4, y + 10, lipAt(y) + reach, y + 4);
+      ctx.stroke();
+    }
+
+    // Hanging vines with leaf pairs, draped at different depths of the face.
+    for (let y = startY; y < endY; y += 170) {
+      const depth = (Math.floor((y - startY) / 170) % 2) * 34;
+      const sway = Math.sin(y * 0.009 + 1.1) * 24;
+      const length = 120 + Math.abs(Math.cos(y * 0.007)) * 100;
+      const baseX = lipAt(y) + 12 + depth;
+      ctx.strokeStyle = 'rgba(54, 116, 52, 0.95)';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(baseX, y);
+      ctx.bezierCurveTo(baseX + 14, y + length * 0.4, baseX + sway, y + length * 0.75, baseX + sway * 0.6, y + length);
+      ctx.stroke();
+
+      ctx.fillStyle = '#3f8a3a';
+      for (let l = 1; l <= 5; l++) {
+        const t = l / 6;
+        const vx = baseX + sway * t * 0.7;
+        const vy = y + length * t;
+        const leaf = 11 - l;
+        ctx.beginPath();
+        ctx.ellipse(vx - leaf * 0.7, vy, leaf, leaf * 0.55, -0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(vx + leaf * 0.7, vy + 4, leaf, leaf * 0.55, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.lineCap = 'butt';
+    ctx.restore();
   }
 
   /**
@@ -5317,6 +5600,29 @@ export class WorldSystem {
         ctx.lineTo(bx, by);
         ctx.stroke();
       }
+
+      // Exposed roots snaking out of the earth wall.
+      ctx.strokeStyle = 'rgba(48, 31, 17, 0.9)';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      for (let r = 0; r < 18; r++) {
+        const angle = (r / 18) * Math.PI * 2 + 0.17;
+        const dirX = Math.cos(angle);
+        const dirY = Math.sin(angle);
+        const outer = this.getPlateauBoundaryRadius(plateau, dirX, dirY) + rim - 4;
+        const inner = outer - 14 - (r % 4) * 4;
+        const spread = (r % 2 === 0 ? 0.1 : -0.12);
+        ctx.beginPath();
+        ctx.moveTo(dirX * outer, dirY * outer);
+        ctx.quadraticCurveTo(
+          Math.cos(angle + spread) * (inner + 8),
+          Math.sin(angle + spread) * (inner + 8),
+          Math.cos(angle + spread * 2.4) * inner,
+          Math.sin(angle + spread * 2.4) * inner
+        );
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
       ctx.restore();
 
       // Grassy top surface, kept at the plateau's real world coordinates so
@@ -5353,6 +5659,65 @@ export class WorldSystem {
           0,
           Math.PI * 2
         );
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Living hilltop: grass tufts, wildflowers and tiny stones rooted on the
+      // plateau surface, clipped to its organic footprint.
+      ctx.save();
+      ctx.beginPath();
+      this.tracePlateauShape(ctx, plateau);
+      ctx.clip();
+      let floraSeed = Math.floor(Math.abs(plateau.x * 31 + plateau.y * 17)) % 2147483647;
+      const floraRandom = () => {
+        floraSeed = (floraSeed * 16807) % 2147483647;
+        return (floraSeed - 1) / 2147483646;
+      };
+      ctx.lineCap = 'round';
+      for (let t = 0; t < 110; t++) {
+        const fx = (floraRandom() - 0.5) * plateau.rx * 1.72;
+        const fy = (floraRandom() - 0.5) * plateau.ry * 1.72;
+        const height = 3 + floraRandom() * 6;
+        ctx.strokeStyle = t % 4 === 0 ? '#163f22' : '#2f7a3d';
+        ctx.lineWidth = 1.4;
+        for (let blade = 0; blade < 3; blade++) {
+          const lean = (blade - 1) * 1.6;
+          ctx.beginPath();
+          ctx.moveTo(fx, fy);
+          ctx.quadraticCurveTo(fx + lean * 0.5, fy - height * 0.6, fx + lean, fy - height);
+          ctx.stroke();
+        }
+      }
+      ctx.lineCap = 'butt';
+      const plateauPetals = ['#f8fafc', '#f9a8d4', '#fde047', '#d8b4fe'];
+      for (let f = 0; f < 30; f++) {
+        const fx = (floraRandom() - 0.5) * plateau.rx * 1.7;
+        const fy = (floraRandom() - 0.5) * plateau.ry * 1.7;
+        const kind = Math.floor(floraRandom() * plateauPetals.length);
+        ctx.fillStyle = plateauPetals[kind];
+        for (let p = 0; p < 4; p++) {
+          const angle = (p / 4) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.arc(fx + Math.cos(angle) * 2.1, fy + Math.sin(angle) * 2.1, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.arc(fx, fy, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      for (let r = 0; r < 12; r++) {
+        const rx = (floraRandom() - 0.5) * plateau.rx * 1.6;
+        const ry = (floraRandom() - 0.5) * plateau.ry * 1.6;
+        const size = 2 + floraRandom() * 5;
+        ctx.fillStyle = 'rgba(112, 108, 96, 0.85)';
+        ctx.beginPath();
+        ctx.ellipse(rx, ry, size, size * 0.65, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(90, 140, 74, 0.7)';
+        ctx.beginPath();
+        ctx.ellipse(rx - size * 0.2, ry - size * 0.2, size * 0.55, size * 0.32, 0, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
@@ -5411,6 +5776,36 @@ export class WorldSystem {
         const lateral =
           profile.center + ((s % 3) - 1) * profile.halfWidth * 0.45;
         ctx.fillRect(d, lateral, 3, 2);
+      }
+
+      // Stone steps carved into the dirt ramp, so the climb reads as a stair.
+      let stepIndex = 0;
+      for (let d = rampInner + 10; d < rampOuter - 24; d += 27) {
+        const profile = this.getPlateauRampProfile(plateau, d, rampInner, rampOuter);
+        const half = profile.halfWidth * (0.58 + (stepIndex % 2) * 0.05);
+        const jitter = Math.sin(stepIndex * 1.7) * 1.5;
+        const columns = 4;
+        const blockHeight = (half * 2) / columns;
+        for (let b = 0; b < columns; b++) {
+          const top = profile.center - half + b * blockHeight + 1;
+          const h = blockHeight - 2.5;
+          ctx.fillStyle =
+            (stepIndex + b) % 3 === 0
+              ? '#8d8677'
+              : (stepIndex + b) % 3 === 1
+                ? '#7b7466'
+                : '#6d675a';
+          ctx.fillRect(d + jitter, top, 18, h);
+
+          // Lit tread and dark riser.
+          ctx.fillStyle = 'rgba(214, 206, 182, 0.55)';
+          ctx.fillRect(d + jitter, top, 18, 1.4);
+          ctx.fillStyle = 'rgba(30, 24, 16, 0.55)';
+          ctx.fillRect(d + jitter + 16.6, top, 1.4, h);
+          ctx.fillStyle = 'rgba(24, 18, 12, 0.4)';
+          ctx.fillRect(d + jitter, top + h - 1, 18, 1);
+        }
+        stepIndex++;
       }
       ctx.restore();
 
@@ -5760,19 +6155,41 @@ export class WorldSystem {
       ctx.translate(lake.x, lake.y);
       ctx.rotate(lake.rotation);
 
-      ctx.fillStyle = '#145466';
+      // Two depth bands: a bright turquoise ring near the beach and a deep
+      // blue core around the middle of the lake (where the Sucuri island sits).
+      ctx.fillStyle = '#4fb9b0';
       ctx.beginPath();
       this.traceLakeShape(ctx, lake, lake.rx, lake.ry);
       ctx.fill();
 
-      ctx.fillStyle = '#1b6b82';
+      ctx.fillStyle = '#35a3a8';
       ctx.beginPath();
-      this.traceLakeShape(ctx, lake, lake.rx - 10, lake.ry - 8);
+      this.traceLakeShape(ctx, lake, lake.rx * 0.92, lake.ry * 0.92);
       ctx.fill();
 
-      ctx.fillStyle = '#2b8ba1';
+      ctx.fillStyle = '#2a95a6';
       ctx.beginPath();
-      this.traceLakeShape(ctx, lake, lake.rx * 0.82, lake.ry * 0.82);
+      this.traceLakeShape(ctx, lake, lake.rx * 0.78, lake.ry * 0.78);
+      ctx.fill();
+
+      ctx.fillStyle = '#1f7f9a';
+      ctx.beginPath();
+      this.traceLakeShape(
+        ctx,
+        lake,
+        lake.rx * DEEP_WATER_DEPTH_RATIO,
+        lake.ry * DEEP_WATER_DEPTH_RATIO
+      );
+      ctx.fill();
+
+      ctx.fillStyle = '#145c78';
+      ctx.beginPath();
+      this.traceLakeShape(ctx, lake, lake.rx * 0.46, lake.ry * 0.46);
+      ctx.fill();
+
+      ctx.fillStyle = '#0e4761';
+      ctx.beginPath();
+      this.traceLakeShape(ctx, lake, lake.rx * 0.24, lake.ry * 0.24);
       ctx.fill();
 
       if (waterShimmer) {
@@ -5783,6 +6200,13 @@ export class WorldSystem {
         ctx.fill();
         ctx.globalAlpha = 1;
       }
+
+      // Foam line where the water meets the sand.
+      ctx.strokeStyle = 'rgba(214, 248, 240, 0.45)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      this.traceLakeShape(ctx, lake, lake.rx - 3, lake.ry - 3);
+      ctx.stroke();
 
       // Soft highlight on the water.
       ctx.strokeStyle = 'rgba(170, 230, 240, 0.22)';
@@ -6337,6 +6761,35 @@ export class WorldSystem {
       ctx.ellipse(-rock.size * 0.22, -rock.size * 0.2, rock.size * 0.5, rock.size * 0.3, 0, 0, Math.PI * 2);
       ctx.fill();
 
+      // Moss creeping over the top and down the shaded side.
+      ctx.fillStyle = 'rgba(58, 125, 58, 0.72)';
+      ctx.beginPath();
+      ctx.ellipse(
+        -rock.size * 0.12,
+        -rock.size * 0.28,
+        rock.size * 0.62,
+        rock.size * 0.3,
+        -0.18,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(112, 168, 84, 0.55)';
+      for (let m = 0; m < 3; m++) {
+        ctx.beginPath();
+        ctx.ellipse(
+          (m - 1) * rock.size * 0.34,
+          -rock.size * (0.3 + (m % 2) * 0.12),
+          rock.size * 0.22,
+          rock.size * 0.12,
+          0,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
+
       ctx.restore();
     }
 
@@ -6370,6 +6823,55 @@ export class WorldSystem {
       ctx.moveTo(0, 0);
       ctx.lineTo(0, -fern.size * 0.8);
       ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // Wildflower clusters.
+    const flowerPetals = ['#f8fafc', '#f9a8d4', '#fde047', '#c084fc'];
+    const flowerCenters = ['#fbbf24', '#db2777', '#ca8a04', '#7e22ce'];
+    for (let i = 0; i < this.flowers.length; i++) {
+      const flower = this.flowers[i];
+      if (!camera.isInView(flower.x, flower.y, flower.size * 3 + 10)) continue;
+
+      const screen = camera.worldToScreen(flower.x, flower.y);
+      ctx.save();
+      ctx.translate(screen.x, screen.y);
+      ctx.rotate(flower.rotation);
+
+      // Short stems fanning out from the base.
+      ctx.strokeStyle = 'rgba(26, 74, 38, 0.9)';
+      ctx.lineWidth = 1;
+      for (let s = 0; s < 3; s++) {
+        const lean = (s - 1) * flower.size * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(lean * 0.4, -flower.size * 1.1, lean, -flower.size * 2);
+        ctx.stroke();
+      }
+
+      for (let s = 0; s < 3; s++) {
+        const lean = (s - 1) * flower.size * 0.5;
+        const px = lean;
+        const py = -flower.size * 2;
+        ctx.fillStyle = flowerPetals[flower.kind];
+        for (let p = 0; p < 4; p++) {
+          const angle = (p / 4) * Math.PI * 2 + flower.tone;
+          ctx.beginPath();
+          ctx.arc(
+            px + Math.cos(angle) * flower.size * 0.34,
+            py + Math.sin(angle) * flower.size * 0.34,
+            flower.size * 0.3,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
+        ctx.fillStyle = flowerCenters[flower.kind];
+        ctx.beginPath();
+        ctx.arc(px, py, flower.size * 0.24, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       ctx.restore();
     }
@@ -7002,17 +7504,25 @@ export class WorldSystem {
     ctx.ellipse(0, 4, size * 0.55, size * 0.2, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // Dappled light breaking through the canopy, projected on the floor.
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.beginPath();
+    ctx.ellipse(-size * 0.2, 0, size * 0.34, size * 0.12, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+
     // Trunk
     ctx.fillStyle = '#4a2f1b';
     ctx.fillRect(-size * 0.08, -size * 0.5, size * 0.16, size * 0.6);
+    ctx.fillStyle = 'rgba(148, 103, 63, 0.4)';
+    ctx.fillRect(-size * 0.08, -size * 0.5, size * 0.05, size * 0.6);
 
     // Surface roots crawling out over the forest floor.
     ctx.strokeStyle = tree.tone > 0.5 ? '#3f2a16' : '#4a2f1b';
     ctx.lineWidth = Math.max(1.5, size * 0.045);
     ctx.lineCap = 'round';
-    for (let r = 0; r < 5; r++) {
-      const spread = -1.15 + (r / 4) * 2.3;
-      const length = size * (0.2 + (r % 2) * 0.08);
+    for (let r = 0; r < 7; r++) {
+      const spread = -1.4 + (r / 6) * 2.8;
+      const length = size * (0.18 + (r % 3) * 0.07);
       ctx.beginPath();
       ctx.moveTo(0, size * 0.02);
       ctx.quadraticCurveTo(
@@ -7026,16 +7536,44 @@ export class WorldSystem {
     ctx.lineCap = 'butt';
 
     // Canopy
-    ctx.fillStyle = tree.tone > 0.5 ? '#14532d' : '#166534';
+    ctx.fillStyle = tree.tone > 0.5 ? '#0f4023' : '#12522c';
     ctx.beginPath();
     ctx.arc(0, -size * 0.62, size * 0.48, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = '#15803d';
+    ctx.fillStyle = tree.tone > 0.5 ? '#14532d' : '#166534';
     ctx.beginPath();
     ctx.arc(-size * 0.22, -size * 0.72, size * 0.34, 0, Math.PI * 2);
     ctx.arc(size * 0.24, -size * 0.7, size * 0.32, 0, Math.PI * 2);
     ctx.fill();
+
+    // Sunlit leaf clusters on the upper rim.
+    ctx.fillStyle = '#1f9d4d';
+    ctx.beginPath();
+    ctx.arc(-size * 0.3, -size * 0.86, size * 0.18, 0, Math.PI * 2);
+    ctx.arc(size * 0.1, -size * 0.9, size * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+
+    // A hanging liana breaking the canopy silhouette.
+    ctx.strokeStyle = 'rgba(52, 92, 44, 0.9)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(size * 0.34, -size * 0.58);
+    ctx.quadraticCurveTo(size * 0.42, -size * 0.32, size * 0.36, -size * 0.12);
+    ctx.stroke();
+    ctx.fillStyle = '#3f8a3a';
+    ctx.beginPath();
+    ctx.ellipse(size * 0.39, -size * 0.4, size * 0.08, size * 0.045, 0.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // A few ripe fruits peeking out of the leaves.
+    if (tree.tone > 0.35) {
+      ctx.fillStyle = '#c2410c';
+      ctx.beginPath();
+      ctx.arc(-size * 0.12, -size * 0.5, size * 0.055, 0, Math.PI * 2);
+      ctx.arc(size * 0.2, -size * 0.56, size * 0.05, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   renderFruitTrees(ctx: CanvasRenderingContext2D, camera: Camera, player?: Player): void {
