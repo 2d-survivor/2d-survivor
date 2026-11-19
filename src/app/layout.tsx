@@ -17,7 +17,11 @@ export const metadata: Metadata = {
   description: "Survivors: um jogo roguelite de sobrevivência.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="en"

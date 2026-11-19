@@ -396,6 +396,8 @@ const HERO_SPECIALS: Record<string, HeroSpecialDefinition[]> = {
 export class GameEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
+  /** Scratch buffer used by the chunky pixel-art pass. */
+  private pixelCanvas: HTMLCanvasElement | null = null;
 
   public camera: Camera;
   public input: InputManager;
@@ -5104,6 +5106,45 @@ export class GameEngine {
   }
 
   private render(): void {
+    this.renderScene();
+    this.renderPixelPass();
+  }
+
+  /**
+   * Pixel-art pass: the scene is drawn at full resolution, then squashed to
+   * half size and blown back up with nearest-neighbour sampling. That gives
+   * every shape a crisp 2x2 pixel grain, matching the chunky 16-bit look of
+   * the reference art instead of smooth vector edges.
+   */
+  private renderPixelPass(): void {
+    const canvas = this.canvas;
+    const width = canvas.width;
+    const height = canvas.height;
+    if (width < 2 || height < 2) return;
+
+    const smallWidth = Math.max(1, Math.floor(width / 3));
+    const smallHeight = Math.max(1, Math.floor(height / 3));
+    if (!this.pixelCanvas) this.pixelCanvas = document.createElement('canvas');
+    if (this.pixelCanvas.width !== smallWidth || this.pixelCanvas.height !== smallHeight) {
+      this.pixelCanvas.width = smallWidth;
+      this.pixelCanvas.height = smallHeight;
+    }
+
+    const smallCtx = this.pixelCanvas.getContext('2d');
+    if (!smallCtx) return;
+    smallCtx.imageSmoothingEnabled = false;
+    smallCtx.clearRect(0, 0, smallWidth, smallHeight);
+    smallCtx.drawImage(canvas, 0, 0, smallWidth, smallHeight);
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(this.pixelCanvas, 0, 0, width, height);
+    ctx.restore();
+  }
+
+  private renderScene(): void {
     const { ctx, camera } = this;
 
     if (this.insideCave) {

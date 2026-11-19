@@ -99,6 +99,9 @@ const FRUIT_TREES_PER_KIND = 3;
 const RIVER_WIDTH = 980;
 const RIVER_BANK = 260;
 const RIVER_HALF_WIDTH = RIVER_WIDTH / 2;
+// Lakes use their own narrower sand strip so the beach reads like a bright
+// pixel-art shoreline instead of a wide dune.
+const LAKE_SAND = 120;
 // Muddy strip that oozes out of the water margins onto the sand and forest.
 const MUD_BAND = 130;
 
@@ -241,6 +244,8 @@ interface LakeProp {
   rx: number;
   ry: number;
   rotation: number;
+  /** Hand-placed basins are closed and never carve a channel to the river. */
+  riverMouth?: boolean;
 }
 
 interface RiverMouthGeometry {
@@ -345,8 +350,20 @@ interface CanopyEntity {
   radius: number;
 }
 
-const PLATEAU_RIM_WIDTH = 22;
+const PLATEAU_RIM_WIDTH = 42;
 const PLATEAU_RAMP_INSET = 120;
+
+// Hand-placed showcase basin around the opening spawn. It reproduces the
+// reference composition: a turquoise lagoon ringed by sand, flanked by two
+// terraced hills with stone stairs, all wrapped in dense canopy.
+const SHOWCASE_LAKE = { x: 160, y: -2380, rx: 470, ry: 400, rotation: -0.12 };
+const SHOWCASE_SPAWN = { x: 250, y: -1900 };
+const SHOWCASE_TREE_COUNT = 900;
+const SHOWCASE_FERN_COUNT = 260;
+const SHOWCASE_FLOWER_COUNT = 320;
+const SHOWCASE_ROCK_COUNT = 52;
+const SHOWCASE_PALM_COUNT = 70;
+const SHOWCASE_TUFT_COUNT = 360;
 
 export class WorldSystem {
   private readonly forestCave: ForestCave | null;
@@ -467,6 +484,18 @@ export class WorldSystem {
    */
   public getRandomPlayerSpawn(radius: number = 18): { x: number; y: number } {
     if (this.mapId !== 'amazon_forest') return { x: 0, y: 0 };
+
+    // Opening vista: the hero starts on the sand ring of the showcase lagoon so
+    // the very first frame shows the turquoise water, the beach and the
+    // terraced hills instead of an empty patch of grass.
+    if (
+      !this.isWaterSurface(SHOWCASE_SPAWN.x, SHOWCASE_SPAWN.y) &&
+      !this.isOverPlateau(SHOWCASE_SPAWN.x, SHOWCASE_SPAWN.y, radius + 40) &&
+      !this.isOnPlateauRamp(SHOWCASE_SPAWN.x, SHOWCASE_SPAWN.y, radius + 40) &&
+      !this.collidesWithTree(SHOWCASE_SPAWN.x, SHOWCASE_SPAWN.y, radius + 24)
+    ) {
+      return { x: SHOWCASE_SPAWN.x, y: SHOWCASE_SPAWN.y };
+    }
 
     const limit = FOREST_HALF_SIZE - 420;
     const isSafe = (x: number, y: number): boolean => {
@@ -836,6 +865,26 @@ export class WorldSystem {
         rampHalfWidth: 118,
         rampLength: 500,
       },
+      // Showcase terraces flanking the opening lagoon. Both ramps face the
+      // water, so the stone stairs are the first thing the hero sees.
+      {
+        x: 1350,
+        y: -2400,
+        rx: 570,
+        ry: 470,
+        rampAngle: Math.PI - 0.14,
+        rampHalfWidth: 108,
+        rampLength: 430,
+      },
+      {
+        x: -1050,
+        y: -2150,
+        rx: 560,
+        ry: 450,
+        rampAngle: 0.16,
+        rampHalfWidth: 104,
+        rampLength: 420,
+      },
     ];
   }
 
@@ -1166,10 +1215,12 @@ export class WorldSystem {
       });
     }
 
-    // Two lakes to break up the green floor.
+    // Two lakes to break up the green floor, plus the showcase lagoon that
+    // frames the opening spawn (beach, shallow rim and deep blue centre).
     this.lakes = [
       { x: -4000, y: -3600, rx: 1650, ry: 1050, rotation: -0.22 },
       { x: 4100, y: 3500, rx: 1400, ry: 950, rotation: 0.35 },
+      { ...SHOWCASE_LAKE, riverMouth: false },
     ];
     this.riverMouths = null;
 
@@ -1369,6 +1420,7 @@ export class WorldSystem {
     );
 
     this.generateDecorTrees(random);
+    this.generateShowcaseScenery(random);
   }
 
   /**
@@ -1404,6 +1456,152 @@ export class WorldSystem {
         this.decorTrees.push({ kind, x, y, scale, tone: random() });
         break;
       }
+    }
+  }
+
+  /**
+   * True when (x, y) sits on the wide sandy apron that rings a lake, including
+   * the requested padding. Used to keep the opening beach readable.
+   */
+  private isOnLakeBeach(x: number, y: number, padding: number = 0): boolean {
+    for (let i = 0; i < this.lakes.length; i++) {
+      const lake = this.lakes[i];
+      const rx = lake.rx + LAKE_SAND + padding;
+      const ry = lake.ry + LAKE_SAND * 0.85 + padding;
+      const dx = x - lake.x;
+      const dy = y - lake.y;
+      const cos = Math.cos(-lake.rotation);
+      const sin = Math.sin(-lake.rotation);
+      const lx = dx * cos - dy * sin;
+      const ly = dx * sin + dy * cos;
+      if ((lx * lx) / (rx * rx) + (ly * ly) / (ry * ry) <= 1) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Extra dense scenery around the opening lagoon: canopy trees, palms,
+   * ferns, wildflowers, mossy stones and grass tufts packed into the basin so
+   * the first frame reads like the pixel-art reference instead of an empty
+   * lawn. The beach and the spawn clearing are kept clear.
+   */
+  private generateShowcaseScenery(random: () => number): void {
+    const clear = (x: number, y: number, padding: number): boolean => {
+      if (Math.hypot(x - SHOWCASE_SPAWN.x, y - SHOWCASE_SPAWN.y) < 190 + padding) return false;
+      if (this.isInWater(x, y)) return false;
+      if (this.isOnLakeBeach(x, y, padding)) return false;
+      if (this.isOverPlateau(x, y, padding) || this.isOnPlateauRamp(x, y, padding)) return false;
+      if (this.isInSageClearing(x, y, padding)) return false;
+      return true;
+    };
+
+    const sample = (minRadius: number, maxRadius: number): { x: number; y: number } => {
+      const angle = random() * Math.PI * 2;
+      const radius = minRadius + Math.sqrt(random()) * (maxRadius - minRadius);
+      return {
+        x: SHOWCASE_LAKE.x + Math.cos(angle) * radius * 1.25,
+        y: SHOWCASE_LAKE.y + Math.sin(angle) * radius,
+      };
+    };
+
+    // Canopy: the bulk of the jungle. Trees are packed against the shoreline
+    // and thin out only right at the spawn clearing.
+    for (let i = 0; i < SHOWCASE_TREE_COUNT; i++) {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const p = sample(500, 2400);
+        if (!clear(p.x, p.y, 70)) continue;
+        if (this.collidesWithTree(p.x, p.y, 46)) continue;
+
+        const kindRoll = random();
+        const kind: DecorTreeKind =
+          kindRoll < 0.34 ? 'samauma' : kindRoll < 0.72 ? 'castanheira' : 'palmeira';
+        const scale =
+          kind === 'samauma'
+            ? 0.72 + random() * 0.6
+            : kind === 'castanheira'
+              ? 0.6 + random() * 0.55
+              : 0.7 + random() * 0.6;
+        this.decorTrees.push({ kind, x: p.x, y: p.y, scale, tone: random() });
+        break;
+      }
+    }
+
+    for (let i = 0; i < SHOWCASE_PALM_COUNT; i++) {
+      const p = sample(560, 2100);
+      if (!clear(p.x, p.y, 40)) continue;
+      this.palms.push({
+        x: p.x,
+        y: p.y,
+        size: 48 + random() * 38,
+        tone: random(),
+        lean: (random() - 0.5) * 0.6,
+      });
+    }
+
+    for (let i = 0; i < SHOWCASE_FERN_COUNT; i++) {
+      const p = sample(480, 2200);
+      if (!clear(p.x, p.y, 12)) continue;
+      this.ferns.push({
+        x: p.x,
+        y: p.y,
+        size: 13 + random() * 17,
+        tone: random(),
+        rotation: random() * Math.PI * 2,
+      });
+    }
+
+    for (let i = 0; i < SHOWCASE_FLOWER_COUNT; i++) {
+      const p = sample(460, 2150);
+      if (!clear(p.x, p.y, 6)) continue;
+      this.flowers.push({
+        x: p.x,
+        y: p.y,
+        size: 4 + random() * 6,
+        tone: random(),
+        rotation: (random() - 0.5) * 0.6,
+        kind: Math.floor(random() * 4),
+      });
+    }
+
+    for (let i = 0; i < SHOWCASE_ROCK_COUNT; i++) {
+      const p = sample(520, 2000);
+      if (!clear(p.x, p.y, 20)) continue;
+      this.rocks.push({
+        x: p.x,
+        y: p.y,
+        size: 11 + random() * 18,
+        tone: random(),
+        rotation: random() * Math.PI * 2,
+      });
+    }
+
+    for (let i = 0; i < SHOWCASE_TUFT_COUNT; i++) {
+      const p = sample(480, 2100);
+      if (!clear(p.x, p.y, 4)) continue;
+      this.groundTufts.push({
+        x: p.x,
+        y: p.y,
+        size: 3.5 + random() * 6.5,
+        tone: random(),
+        rotation: (random() - 0.5) * 0.7,
+      });
+    }
+
+    // Broken ground: dirt trails, mossy clearings and damp soil patches that
+    // break the flat green floor into readable pixel-art terrain.
+    for (let i = 0; i < 150; i++) {
+      const p = sample(420, 2200);
+      if (!clear(p.x, p.y, 30)) continue;
+      const kindRoll = random();
+      this.floorPatches.push({
+        x: p.x,
+        y: p.y,
+        rx: 40 + random() * 130,
+        ry: 22 + random() * 80,
+        tone: random(),
+        rotation: random() * Math.PI,
+        kind: kindRoll < 0.5 ? 'dirt' : kindRoll < 0.8 ? 'moss' : 'wet',
+      });
     }
   }
 
@@ -1558,6 +1756,7 @@ export class WorldSystem {
 
     for (let i = 0; i < this.lakes.length; i++) {
       const lake = this.lakes[i];
+      if (lake.riverMouth === false) continue;
       const anchorX = lake.x;
       const endY = this.riverCenterY(anchorX);
       // +1 when the river lies south of the lake, -1 when it lies north.
@@ -5778,33 +5977,32 @@ export class WorldSystem {
         ctx.fillRect(d, lateral, 3, 2);
       }
 
-      // Stone steps carved into the dirt ramp, so the climb reads as a stair.
+      // Stone steps carved into the dirt ramp: each tread spans the full ramp
+      // width, so the climb reads as a staircase from any camera angle.
       let stepIndex = 0;
-      for (let d = rampInner + 10; d < rampOuter - 24; d += 27) {
+      for (let d = rampInner + 12; d < rampOuter - 26; d += 24) {
         const profile = this.getPlateauRampProfile(plateau, d, rampInner, rampOuter);
-        const half = profile.halfWidth * (0.58 + (stepIndex % 2) * 0.05);
-        const jitter = Math.sin(stepIndex * 1.7) * 1.5;
-        const columns = 4;
-        const blockHeight = (half * 2) / columns;
-        for (let b = 0; b < columns; b++) {
-          const top = profile.center - half + b * blockHeight + 1;
-          const h = blockHeight - 2.5;
-          ctx.fillStyle =
-            (stepIndex + b) % 3 === 0
-              ? '#8d8677'
-              : (stepIndex + b) % 3 === 1
-                ? '#7b7466'
-                : '#6d675a';
-          ctx.fillRect(d + jitter, top, 18, h);
+        const half = profile.halfWidth * 0.94;
+        const jitter = Math.sin(stepIndex * 1.7) * 1.2;
+        const top = profile.center - half;
+        const height = half * 2;
+        const tread = 24 * 0.72;
 
-          // Lit tread and dark riser.
-          ctx.fillStyle = 'rgba(214, 206, 182, 0.55)';
-          ctx.fillRect(d + jitter, top, 18, 1.4);
-          ctx.fillStyle = 'rgba(30, 24, 16, 0.55)';
-          ctx.fillRect(d + jitter + 16.6, top, 1.4, h);
-          ctx.fillStyle = 'rgba(24, 18, 12, 0.4)';
-          ctx.fillRect(d + jitter, top + h - 1, 18, 1);
-        }
+        ctx.fillStyle =
+          stepIndex % 3 === 0 ? '#918a7a' : stepIndex % 3 === 1 ? '#837c6d' : '#766f61';
+        ctx.fillRect(d + jitter, top, tread, height);
+
+        // Lit front edge of the tread...
+        ctx.fillStyle = 'rgba(226, 218, 192, 0.6)';
+        ctx.fillRect(d + jitter, top, tread, 1.6);
+        // ...and the dark riser facing down the slope.
+        ctx.fillStyle = 'rgba(28, 21, 13, 0.62)';
+        ctx.fillRect(d + jitter + tread, top, 3, height);
+
+        // Slight darker grain so the stone does not read as a flat plank.
+        ctx.fillStyle = 'rgba(32, 26, 18, 0.18)';
+        ctx.fillRect(d + jitter + 4, top + height * 0.45, tread - 8, 1.4);
+
         stepIndex++;
       }
       ctx.restore();
@@ -6022,8 +6220,8 @@ export class WorldSystem {
       this.traceLakeShape(
         ctx,
         lake,
-        lake.rx + RIVER_BANK + 44,
-        lake.ry + RIVER_BANK * 0.85 + 36
+        lake.rx + LAKE_SAND + 34,
+        lake.ry + LAKE_SAND * 0.85 + 26
       );
       ctx.fill();
 
@@ -6032,19 +6230,14 @@ export class WorldSystem {
       this.traceLakeShape(
         ctx,
         lake,
-        lake.rx + RIVER_BANK + 18,
-        lake.ry + RIVER_BANK * 0.85 + 14
+        lake.rx + LAKE_SAND + 14,
+        lake.ry + LAKE_SAND * 0.85 + 10
       );
       ctx.fill();
 
       ctx.fillStyle = '#b89355';
       ctx.beginPath();
-      this.traceLakeShape(
-        ctx,
-        lake,
-        lake.rx + RIVER_BANK,
-        lake.ry + RIVER_BANK * 0.85
-      );
+      this.traceLakeShape(ctx, lake, lake.rx + LAKE_SAND, lake.ry + LAKE_SAND * 0.85);
       ctx.fill();
 
       ctx.fillStyle = '#cdb079';
@@ -6052,8 +6245,8 @@ export class WorldSystem {
       this.traceLakeShape(
         ctx,
         lake,
-        lake.rx + RIVER_BANK * 0.62,
-        lake.ry + RIVER_BANK * 0.54
+        lake.rx + LAKE_SAND * 0.62,
+        lake.ry + LAKE_SAND * 0.54
       );
       ctx.fill();
 
@@ -6062,8 +6255,8 @@ export class WorldSystem {
       this.traceLakeShape(
         ctx,
         lake,
-        lake.rx + RIVER_BANK * 0.3,
-        lake.ry + RIVER_BANK * 0.26
+        lake.rx + LAKE_SAND * 0.3,
+        lake.ry + LAKE_SAND * 0.26
       );
       ctx.fill();
 
@@ -6074,8 +6267,8 @@ export class WorldSystem {
         this.traceLakeShape(
           ctx,
           lake,
-          lake.rx + RIVER_BANK * 0.85,
-          lake.ry + RIVER_BANK * 0.72
+          lake.rx + LAKE_SAND * 0.85,
+          lake.ry + LAKE_SAND * 0.72
         );
         ctx.fill();
         ctx.globalAlpha = 1;
@@ -6084,20 +6277,16 @@ export class WorldSystem {
       // Muddy lakeshore ring before the water covers its inner edge. The
       // Sucuri's arena replaces the upper lake's brown rim with solid stone,
       // painted after the river mouths so the dam also closes their channel.
+      // Keep it a thin wet strip: the wide sand apron must stay bright tan.
       if (!(this.anacondaArenaActive && i === 0)) {
-        ctx.fillStyle = '#4a3322';
+        ctx.fillStyle = '#a5854f';
         ctx.beginPath();
-        this.traceLakeShape(ctx, lake, lake.rx + MUD_BAND, lake.ry + MUD_BAND);
+        this.traceLakeShape(ctx, lake, lake.rx + 26, lake.ry + 22);
         ctx.fill();
 
-        ctx.fillStyle = '#3a2718';
+        ctx.fillStyle = '#8a6a3c';
         ctx.beginPath();
-        this.traceLakeShape(
-          ctx,
-          lake,
-          lake.rx + MUD_BAND * 0.62,
-          lake.ry + MUD_BAND * 0.62
-        );
+        this.traceLakeShape(ctx, lake, lake.rx + 12, lake.ry + 10);
         ctx.fill();
       }
 
@@ -6157,22 +6346,27 @@ export class WorldSystem {
 
       // Two depth bands: a bright turquoise ring near the beach and a deep
       // blue core around the middle of the lake (where the Sucuri island sits).
-      ctx.fillStyle = '#4fb9b0';
+      ctx.fillStyle = '#6accc4';
       ctx.beginPath();
       this.traceLakeShape(ctx, lake, lake.rx, lake.ry);
       ctx.fill();
 
-      ctx.fillStyle = '#35a3a8';
+      ctx.fillStyle = '#4bb5b7';
       ctx.beginPath();
-      this.traceLakeShape(ctx, lake, lake.rx * 0.92, lake.ry * 0.92);
+      this.traceLakeShape(ctx, lake, lake.rx * 0.93, lake.ry * 0.93);
       ctx.fill();
 
-      ctx.fillStyle = '#2a95a6';
+      ctx.fillStyle = '#35a0b2';
       ctx.beginPath();
-      this.traceLakeShape(ctx, lake, lake.rx * 0.78, lake.ry * 0.78);
+      this.traceLakeShape(ctx, lake, lake.rx * 0.84, lake.ry * 0.84);
       ctx.fill();
 
-      ctx.fillStyle = '#1f7f9a';
+      ctx.fillStyle = '#2486ab';
+      ctx.beginPath();
+      this.traceLakeShape(ctx, lake, lake.rx * 0.72, lake.ry * 0.72);
+      ctx.fill();
+
+      ctx.fillStyle = '#1b6f96';
       ctx.beginPath();
       this.traceLakeShape(
         ctx,
@@ -6182,14 +6376,14 @@ export class WorldSystem {
       );
       ctx.fill();
 
-      ctx.fillStyle = '#145c78';
+      ctx.fillStyle = '#145973';
       ctx.beginPath();
-      this.traceLakeShape(ctx, lake, lake.rx * 0.46, lake.ry * 0.46);
+      this.traceLakeShape(ctx, lake, lake.rx * 0.42, lake.ry * 0.42);
       ctx.fill();
 
-      ctx.fillStyle = '#0e4761';
+      ctx.fillStyle = '#0e4460';
       ctx.beginPath();
-      this.traceLakeShape(ctx, lake, lake.rx * 0.24, lake.ry * 0.24);
+      this.traceLakeShape(ctx, lake, lake.rx * 0.26, lake.ry * 0.26);
       ctx.fill();
 
       if (waterShimmer) {
@@ -6207,6 +6401,38 @@ export class WorldSystem {
       ctx.beginPath();
       this.traceLakeShape(ctx, lake, lake.rx - 3, lake.ry - 3);
       ctx.stroke();
+
+      // Breaking wave arcs inside the shallow turquoise band, so the shore has
+      // the same hand-drawn ripple rhythm as the reference art.
+      for (let w = 0; w < 3; w++) {
+        ctx.strokeStyle = `rgba(226, 252, 248, ${0.34 - w * 0.08})`;
+        ctx.lineWidth = 2.5 - w * 0.5;
+        for (let arc = 0; arc < 3; arc++) {
+          const start = Math.PI * (0.06 + arc * 0.72 + w * 0.06);
+          ctx.beginPath();
+          ctx.ellipse(
+            0,
+            0,
+            lake.rx * (0.88 + w * 0.03),
+            lake.ry * (0.88 + w * 0.03),
+            0,
+            start,
+            start + Math.PI * 0.42
+          );
+          ctx.stroke();
+        }
+      }
+
+      // Scattered white dashes marking the current over the deep blue.
+      ctx.fillStyle = 'rgba(236, 254, 252, 0.5)';
+      for (let d = 0; d < 22; d++) {
+        const angle = d * 2.39996;
+        const radial = 0.32 + ((d * 0.61803398875) % 1) * 0.5;
+        const dx = Math.cos(angle) * lake.rx * radial;
+        const dy = Math.sin(angle) * lake.ry * radial;
+        const length = 6 + (d % 3) * 5;
+        ctx.fillRect(dx, dy, length, 2);
+      }
 
       // Soft highlight on the water.
       ctx.strokeStyle = 'rgba(170, 230, 240, 0.22)';
